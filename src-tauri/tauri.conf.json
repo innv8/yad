@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "yad",
+  "productName": "Yet another Downloader",
   "version": "0.1.0",
   "identifier": "ke.innv8.yad",
   "build": {
@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "yad",
+        "title": "Yet another Downloader",
         "width": 800,
         "height": 600
       }
