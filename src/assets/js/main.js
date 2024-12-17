@@ -1,6 +1,3 @@
-// import { invoke } from '@tauri-apps/api/core';
-
-const { invoke } = require("@tauri-apps/api/core");
 
 window.onload = () => {
 	getRecords();
@@ -23,11 +20,8 @@ function convertToTime(timestamp) {
 }
 
 function isDownloadUrl(str) {
-	const urlPattern = /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/i;
-	const fileExtensions = ['.pdf', '.zip', '.exe', '.mp3', '.txt', '.jpg', '.png', '.tar', '.gz'];
-
-	// Check if it matches a URL pattern and contains a valid file extension
-	return urlPattern.test(str) && fileExtensions.some(extension => str.toLowerCase().endsWith(extension));
+	const urlPattern = /^(https|http|ftp|ftps){1}:\/\/([a-zA-Z\._0-9-\/]+)\/[a-zA-Z0-9\._-]+\.[a-z0-9]/;
+	return urlPattern.test(str);
 }
 
 
@@ -100,9 +94,10 @@ searchField.addEventListener("paste", async (event) => {
 	if (isDownloadUrl(pastedContent)) {
 		const invoke = window.__TAURI__.core.invoke;
 		await invoke("download", { url: pastedContent });
+	} else {
+		console.log(`invalid url: ${pastedContent}`);
 	}
 	searchField.value = '';
 
 })
-
 // End Downloads 
