@@ -1,0 +1,115 @@
+/* Default theme: light */
+:root {
+  /* --background-color: #f8f9fa;
+  --text-color: #212529;
+  --placeholder-color: #adb5bd;
+  --border-color: #ccced0; */
+
+  --background-color: #212529;
+  --text-color: #fff;
+  --placeholder-color: #6c757d;
+  --border-color: #343a40;
+}
+
+/* Dark theme */
+.dark-theme {
+  --background-color: #212529;
+  --text-color: #fff;
+  --placeholder-color: #6c757d;
+  --border-color: #343a40;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('../fonts/Inter.ttf') format('truetype');
+  font-style: normal;
+}
+
+body {
+  background-color: var(--background-color);
+  font-family: 'Inter';
+}
+
+table,
+tr,
+th,
+td {
+  background-color: var(--background-color) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-color) !important;
+}
+
+h3 {
+  font-weight: 300;
+  font-size: 1.4em;
+  color: var(--text-color);
+}
+
+th {
+  font-weight: 500;
+  font-size: 0.8em;
+  border: 1px solid var(--border-color);
+}
+
+td {
+  font-size: 0.7em;
+  border: 1px solid var(--border-color);
+}
+
+td a {
+  border: none !important;
+}
+
+.action-cell {
+  padding: 0;
+}
+
+.action-link {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  text-align: center;
+}
+
+nav.pagination ul li {
+  border: none;
+}
+
+nav.pagination ul li a {
+  background-color: var(--background-color) !important;
+  border: none;
+  color: var(--text-color);
+
+}
+
+nav.pagination ul li.disabled a {
+  color: #868e96 !important;
+  background-color: var(--background-color) !important;
+}
+
+.form {
+  color: var(--text-color);
+}
+
+input.search {
+  color: var(--text-color);
+  background-color: var(--background-color);
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+  border-radius: 0 !important;
+  border-radius: 5px;
+  height: 1.2em;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+input.search:focus {
+  border: none;
+}
+
+input.search::placeholder {
+  color: var(--placeholder-color);
+  font-size: 0.9em;
+  font-style: italic;
+}
