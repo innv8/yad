@@ -11,17 +11,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Yet another Downloader</title>
 
-  <!-- <script type="module" src="/main.js" defer></script> -->
 </head>
 
 <body>
   <main class="container">
 
-    <div class="row mt-3 mb-4">
+    <div class="row mt-4 mb-2">
       <div class="col-6 ">
         <form action="#" class="form">
           <div class="input-group">
-            <input type="text" class="form-control search" placeholder="Paste link to the resource" />
+            <input type="text" id="search" class="form-control search" placeholder="Paste link to the resource" />
           </div>
         </form>
       </div>
@@ -44,200 +43,14 @@
           <th scope="col-md-1">Date</th>
         </tr>
       </thead>
-      <tbody class="table-group-divider">
+      <tbody class="table-group-divider" id="download-records">
 
-        <tr>
-          <td>vlc-3.0.2.dmg</td>
-          <td>23.45 MB</td>
-          <td>
-            <div class="progress" role="progressbar" aria-label="Completed" aria-valuenow="100" aria-valuemax="100">
-              <div class="progress-bar text-bg-success" style="width: 100%">100%</div>
-            </div>
-          </td>
-          <td>Completed</td>
-          <td>Application</td>
-          <td class="action-cell">
-            <a href="#" class="action-link btn btn-sm btn-outline-primary btn-block" onclick="alert('hello')">
-              <i class="fa fa-folder-open"></i>
-            </a>
-          </td>
-          <td>Jan 3rd, 2024</td>
-
-        </tr>
-
-        <tr>
-          <td>some-doc.csv</td>
-          <td>2KB</td>
-          <td>
-            <div class="progress" role="progressbar" aria-label="Failed" aria-valuenow="45" aria-valuemax="100">
-              <div class="progress-bar text-bg-danger" style="width: 45%">45%</div>
-            </div>
-          </td>
-          <td>Failed</td>
-          <td>Document</td>
-          <td>
-            <a href="#" class="action-link btn btn-sm btn-outline-success btn-block" onclick="alert('hello')">
-              <i class="fa fa-play"></i>
-            </a>
-          </td>
-          <td>Jan 4th, 2025</td>
-
-
-        </tr>
-
-        <tr>
-          <td>The jealous husband (2024)</td>
-          <td>1.3GB</td>
-          <td>
-            <div class="progress" role="progressbar" aria-label="In Progress" aria-valuenow="56" aria-valuemax="100">
-              <div class="progress-bar text-bg-info" style="width: 56%">56%</div>
-            </div>
-          </td>
-          <td>In Progress</td>
-          <td>Videos</td>
-          <td>
-            <a href="#" class="action-link btn btn-sm btn-outline-warning btn-block" onclick="alert('hello')">
-              <i class="fa fa-pause"></i>
-            </a>
-          </td>
-          <td>Jan 4th, 2025</td>
-
-        </tr>
-
-        <tr>
-          <td>Learn Rust</td>
-          <td>45.67 GB</td>
-          <td>
-            <div class="progress" role="progressbar" aria-label="Failed" aria-valuenow="78" aria-valuemax="100">
-              <div class="progress-bar text-bg-warning" style="width: 78%">78%</div>
-            </div>
-          </td>
-          <td>Cancelled</td>
-          <td>Document</td>
-          <td>
-            <a href="#" class="action-link btn btn-sm btn-outline-success btn-block" onclick="alert('hello')">
-              <i class="fa fa-play"></i>
-            </a>
-          </td>
-          <td>Jan 4th, 2025</td>
-        </tr>
-
-        <!--  -->
-
-        <tr>
-          <td>vlc-3.0.2.dmg</td>
-          <td>23.45 MB</td>
-          <td>
-            <div class="progress" role="progressbar" aria-label="Completed" aria-valuenow="100" aria-valuemax="100">
-              <div class="progress-bar text-bg-success" style="width: 100%">100%</div>
-            </div>
-          </td>
-          <td>Completed</td>
-          <td>Application</td>
-          <td class="action-cell">
-            <a href="#" class="action-link btn btn-sm btn-outline-primary btn-block" onclick="alert('hello')">
-              <i class="fa fa-folder-open"></i>
-            </a>
-          </td>
-          <td>Jan 3rd, 2024</td>
-        </tr>
-
-        <tr>
-          <td>some-doc.csv</td>
-          <td>2KB</td>
-          <td>
-            <div class="progress" role="progressbar" aria-label="Failed" aria-valuenow="45" aria-valuemax="100">
-              <div class="progress-bar text-bg-danger" style="width: 45%">45%</div>
-            </div>
-          </td>
-          <td>Failed</td>
-          <td>Document</td>
-          <td>
-            <a href="#" class="action-link btn btn-sm btn-outline-success btn-block" onclick="alert('hello')">
-              <i class="fa fa-play"></i>
-            </a>
-          </td>
-          <td>Jan 4th, 2025</td>
-        </tr>
-
-        <tr>
-          <td>The jealous husband (2024)</td>
-          <td>1.3GB</td>
-          <td>
-            <div class="progress" role="progressbar" aria-label="In Progress" aria-valuenow="56" aria-valuemax="100">
-              <div class="progress-bar text-bg-info" style="width: 56%">56%</div>
-            </div>
-          </td>
-          <td>In Progress</td>
-          <td>Videos</td>
-          <td>
-            <a href="#" class="action-link btn btn-sm btn-outline-warning btn-block" onclick="alert('hello')">
-              <i class="fa fa-pause"></i>
-            </a>
-          </td>
-          <td>Jan 4th, 2025</td>
-        </tr>
-
-        <tr>
-          <td>Learn Rust</td>
-          <td>45.67 GB</td>
-          <td>
-            <div class="progress" role="progressbar" aria-label="Failed" aria-valuenow="78" aria-valuemax="100">
-              <div class="progress-bar text-bg-warning" style="width: 78%">78%</div>
-            </div>
-          </td>
-          <td>Cancelled</td>
-          <td>Document</td>
-          <td>
-            <a href="#" class="action-link btn btn-sm btn-outline-success btn-block" onclick="alert('hello')">
-              <i class="fa fa-play"></i>
-            </a>
-          </td>
-          <td>Jan 4th, 2025</td>
-        </tr>
-
-        <tr>
-          <td>The jealous husband (2024)</td>
-          <td>1.3GB</td>
-          <td>
-            <div class="progress" role="progressbar" aria-label="In Progress" aria-valuenow="56" aria-valuemax="100">
-              <div class="progress-bar text-bg-info" style="width: 56%">56%</div>
-            </div>
-          </td>
-          <td>In Progress</td>
-          <td>Videos</td>
-          <td>
-            <a href="#" class="action-link btn btn-sm btn-outline-warning btn-block" onclick="alert('hello')">
-              <i class="fa fa-pause"></i>
-            </a>
-          </td>
-          <td>Jan 4th, 2025</td>
-        </tr>
-
-
-        <tr>
-          <td>some-doc.csv</td>
-          <td>2KB</td>
-          <td>
-            <div class="progress" role="progressbar" aria-label="Failed" aria-valuenow="45" aria-valuemax="100">
-              <div class="progress-bar text-bg-danger" style="width: 45%">45%</div>
-            </div>
-          </td>
-          <td>Failed</td>
-          <td>Document</td>
-          <td>
-            <a href="#" class="action-link btn btn-sm btn-outline-success btn-block" onclick="alert('hello')">
-              <i class="fa fa-play"></i>
-            </a>
-          </td>
-          <td>Jan 4th, 2025</td>
-        </tr>
       </tbody>
     </table>
 
 
     <div class="row">
-      <nav aria-label="Pagination" class="pagination  justify-content-end">
+      <nav aria-label="Pagination" class="pagination justify-content-end">
         <ul class="pagination pagination-sm">
           <li class="page-item"><a href="#" class="page-link">
               <span aria-hidden="true">&laquo;</span>
@@ -255,6 +68,9 @@
 
 
   </main>
+  <!-- <script src="https://unpkg.com/@tauri-apps/api@1.4.0/dist/tauri.min.js"></script> -->
+
+  <script type="module" src="assets/js/main.js"></script>
 </body>
 
 </html>
