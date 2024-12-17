@@ -175,18 +175,25 @@ pub fn update_download_record(
     file_url: &str,
     download_status: &str,
     download_stop_time: i64,
-    download_duration: i64,
+    file_size: u64,
     cfg: &Config,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let conn = get_db(&cfg)?;
     let sql = r#"UPDATE download_record 
-        SET download_status=?1, download_stop_time=?2, download_duration=?3 
+        SET download_status=?1, download_stop_time=?2, file_size=?3
         WHERE file_url = ?4
         LIMIT 1;"#;
-    conn.execute(
+    match conn.execute(
         sql,
-        params![download_status, download_stop_time, download_duration, file_url,],
-    )?;
+        params![download_status, download_stop_time, file_size, file_url,],
+    ) {
+        Ok(_) => {
+            println!("UPDATED SUCCESSFULLY");
+        }
+        Err(e) => {
+            println!("FAILED TO UPDATE BECAUSE {}", e);
+        }
+    };
     Ok(())
 }
 

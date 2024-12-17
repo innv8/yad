@@ -7,16 +7,34 @@ window.onload = () => {
 function convertToTime(timestamp) {
 	const date = new Date(timestamp * 1000);
 	const options = {
-		weekday: "short",
-		year: "numeric",
 		month: "short",
 		day: "numeric",
 		hour: "2-digit",
 		minute: "2-digit",
 		hour12: true,
 	};
-	const formattedDate = date.toLocaleString("en-US", options);
+	const formattedDate = date.toLocaleString("en-GB", options);
 	return formattedDate;
+}
+
+function getSize(size) {
+	let unit = '';
+	let finalSize = 0;
+
+	if (size < 1024) {
+		finalSize = size;
+		unit = 'Bytes';
+	} else if (size < 1048576) {
+		finalSize = size/ 1024;
+		unit= 'KB';
+	} else if (size < 1073741824){
+		finalSize = size / 1048576;
+		unit = 'MB';
+	} else {
+		finalSize = size / (1073741824 * 1024);
+		unit = 'GB';
+	}
+	return `${Math.round(finalSize * 10)/ 10} ${unit}`;
 }
 
 function isDownloadUrl(str) {
@@ -50,7 +68,7 @@ async function getRecords() {
 			htmlBody += `
 			<tr>
 				<td>${item['file_name']}</td>
-				<td>${item['file_size']}</td>
+				<td>${getSize(item['file_size'])}</td>
 				<td>
 					<div 
 						class="progress" 
@@ -65,7 +83,6 @@ async function getRecords() {
 						</div>
 					</div>
 				</td>
-				<td>${status}</td>
 				<td>${item['file_type']}</td>
 				<td>
 					<a 
@@ -75,7 +92,6 @@ async function getRecords() {
 						<i class="${icon}"></i>
 					</a>
 				</td>
-				<td>${dateTime}</td>
 			</tr>
 			`;
 		}
@@ -94,9 +110,11 @@ searchField.addEventListener("paste", async (event) => {
 	if (isDownloadUrl(pastedContent)) {
 		const invoke = window.__TAURI__.core.invoke;
 		await invoke("download", { url: pastedContent });
+		getRecords();
 	} else {
 		console.log(`invalid url: ${pastedContent}`);
 	}
+
 	searchField.value = '';
 
 })

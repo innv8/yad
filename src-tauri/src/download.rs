@@ -42,11 +42,12 @@ pub fn download(
                 Ok(metadata) => metadata.len(),
                 Err(_) => 1234,
             };
+            println!("::::::: file size:: {}", file.file_size);
             storage::update_download_record(
                 &file.file_url,
                 "Finished",
                 file.download_stop_time,
-                file.download_duration,
+                file.file_size,
                 cfg,
             )?;
             Ok(file)
