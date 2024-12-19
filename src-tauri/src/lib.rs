@@ -1,21 +1,21 @@
 use reqwest::blocking::Client;
 use serde::Serialize;
 use std::{
-    fs::File,
+    fs::{self,File},
     io::{Seek, SeekFrom, Write},
     sync::{mpsc, Arc, Mutex},
-    thread::{self, sleep},
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    thread,
+    time::Instant,
 };
 
-use tauri::{self, utils::acl::schema::PermissionSchemaGenerator, Emitter, Window};
+use tauri::{self, Emitter};
 
 pub mod config;
 pub mod download;
 pub mod files;
 pub mod storage;
 
-const CHUNK_SIZE: u64 = 1024 * 8;
+const CHUNK_SIZE: u64 = 1024 * 1024; // 1MB chunks
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -34,7 +34,7 @@ struct DownloadStarted<'a> {
     download_status: &'a str,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct DownloadProgress {
     download_id: i64,
@@ -56,63 +56,17 @@ struct DownloadMessage<'a> {
     status: &'a str,
 }
 
-// dummy download
-#[tauri::command]
-fn dummy_download(window: tauri::Window, url: String) -> Result<(), String> {
-    println!("downloading: {url}");
-
-    // send download started event
-    window
-        .emit(
-            "download-started",
-            DownloadStarted {
-                download_id: 100,
-                file_url: "url",
-                file_name: "Jason Bourne.mp4",
-                file_type: "Videos",
-                download_status: "Pending",
-            },
-        )
-        .unwrap();
-
-    let (sender, receiver) = mpsc::channel::<DownloadProgress>();
-
-    for i in [1, 1, 3, 5, 20, 20, 10, 10, 12, 10] {
-        let sender = sender.clone();
-        thread::spawn(move || {
-            sender
-                .send(DownloadProgress {
-                    download_id: 100,
-                    total_size: 100,
-                    downloaded: i,
-                })
-                .expect("Failed to send download progress to receiver");
-        });
-    }
-
-    let window = Arc::new(Mutex::new(window));
-    std::thread::spawn(move || {
-        for p in receiver {
-            if let Ok(window) = window.lock() {
-                window
-                    .emit("download-progress", p)
-                    .expect("failed to emit download progress");
-            }
-        }
-    });
-
-    Ok(())
-}
-
-/*
 #[tauri::command]
 fn download(window: tauri::Window, url: String) -> Result<(), String> {
     let url_copy = url.clone();
+    
     let start_time = Instant::now();
     // 1. read/write download to db and check it's id
     let cfg = config::Config::default();
     let file = files::File::new(&url, &cfg);
     let mut record = storage::search_by_url(&url, &cfg).unwrap_or_default();
+    fs::create_dir_all(&file.destination_dir)
+        .map_err(|e| format!("failed to create destination dir: {e:?}"))?;
 
     let download_id = &record.id;
 
@@ -139,6 +93,7 @@ fn download(window: tauri::Window, url: String) -> Result<(), String> {
 
     // 2. emit the download started event
     println!("starting the download process for {}", &file.file_name);
+
     window
         .emit(
             "download-started",
@@ -152,292 +107,80 @@ fn download(window: tauri::Window, url: String) -> Result<(), String> {
         )
         .unwrap();
 
-    let client = Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = Client::new();
 
     // get size from the head request
-    let response = client
+    let total_size = client
         .head(&url)
         .send()
-        .map_err(|e| format!("failed to read headers for file because {e}"))?;
-    let total_size = response
+        .map_err(|e| format!("failed to send head request: {e}"))?
         .headers()
-        .get("content-length")
+        .get(reqwest::header::CONTENT_LENGTH)
         .ok_or("Content-Length header missing")?
         .to_str()
-        .map_err(|e| format!("failed to read content length because {e}"))?
+        .map_err(|e| format!("invalid content length header: {e}"))?
         .parse::<u64>()
-        .map_err(|e| format!("failed to read total size because {e}"))?;
+        .map_err(|e| format!("failed to parse content length: {e}"))?;
+
     println!("File size for {} is {}", &file.file_name, total_size);
+
 
     let d_file = File::create(&file.destination_path)
         .map_err(|e| format!("failed to create file because {e}"))?;
     d_file
-        .set_len(total_size)
+       .set_len(total_size)
         .map_err(|e| format!("failed to create blank file because {e}"))?;
     let d_file = Arc::new(Mutex::new( d_file));
 
     // create threads to download each chunk
     // create a channel to receive download progress
     let (sender, receiver) = mpsc::channel::<DownloadProgress>();
-
-    for start in (0..total_size).step_by(CHUNK_SIZE as usize) {
-        let end = (start + CHUNK_SIZE - 1).min(total_size - 1);
-
-        thread::spawn({
-            let client = client.clone();
-            let d_file = Arc::clone(&d_file);
-
-            let url = url_copy.clone();
-
-            let sender = sender.clone();
-            move || {
-                let response = client
-                    .get(&url)
-                    .header("Range", format!("bytes={start}-{end}"))
-                    .send()
-                    .and_then(|res| res.bytes())
-                    .map_err(|e| format!("Failed to read bytes because {e}"));
-                if let Ok(response) = response {
-                    let mut d_dile = d_file
-                        .lock()
-                        map_err(|e| format!("mutex lock failed: {e:?}"));
-
-                    if let Err(e) = d_file.seek(SeekFrom::Start(start)) {
-                        println!("seek failed");
-                        return;
-                    }
-
-                    if let Err(e) = d_file.write_all(&response) {
-                        println!("failed to write chunk of file: {e}");
-                        return;
-                    }
-                   sender .send(DownloadProgress {
-                        download_id: record.id,
-                        total_size,
-                        downloaded: end - start,
-                    })
-                    .expect("failed to send download progress to channel");
-                }
-            }
-        });
-    }
-
-    // listen for the progress events
-    let window = Arc::new(Mutex::new(window));
-    std::thread::spawn(move || {
-        for progress in receiver {
-            if let Ok(window) = window.lock() {
-                window
-                    .emit("download-progress", progress)
-                    .expect("failed to emit download progress event");
+    let progress_window = window.clone();
+    thread::spawn(move || {
+        for downloaded in receiver {
+            if let Err(e) = progress_window.emit("download-progress", downloaded) {
+                println!("failed to emit download progress");
             }
         }
     });
-
-    let duration = start_time.elapsed().as_secs_f64();
-    println!("finished download in: {duration}s");
-
-    /*
-     let window = window.lock().map_err(|e| format!("failed to lock window at the end: {e}"))?;
-      window
-          .emit(
-              "download-finished",
-              DownloadFinished {
-                  download_id: record.id,
-              },
-          )
-          .unwrap();
-    */
-
-    let download_stop_time = SystemTime::now();
-    let download_stop_time = download_stop_time
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let download_stop_time = download_stop_time.as_secs();
-
-    storage::update_download_record(record.id, "Finished", download_stop_time, total_size, &cfg)
-        .map_err(|e| format!("failed to update download record because {e}"))?;
-
-    Ok(())
-} 
-*/
-
-#[tauri::command]
-fn download(window: tauri::Window, url: String) -> Result<(), String> {
-    let url_copy = url.clone();
-    let start_time = Instant::now();
-   
-    // 1. read/write download to db and check it's id
-    let cfg = config::Config::default();
-    let file = files::File::new(&url, &cfg);
-    let mut record = storage::search_by_url(&url, &cfg).unwrap_or_default();
-
-    let download_id = &record.id;
-
-    // if it does not exist, create it
-    if *download_id == 0 {
-        let dr = storage::DownloadRecord::from(file.clone());
-        let download_id = storage::insert_record(&dr, &cfg).unwrap_or_default();
-        record.id = download_id;
-    }
-
-    if record.download_status == *"Finished" {
-        window
-            .emit(
-                "download-message",
-                DownloadMessage {
-                    download_id: record.id,
-                    message: "File already downloaded",
-                    status: "success",
-                },
-            )
-            .unwrap();
-        return Ok(());
-    }
-
-    // 2. emit the download started event
-    println!("starting the download process for {}", &file.file_name);
-    window
-        .emit(
-            "download-started",
-            DownloadStarted {
-                download_id: record.id,
-                file_url: &file.file_url,
-                file_name: &file.file_name,
-                file_type: &file.file_type.to_string(),
-                download_status: &record.download_status,
-            },
-        )
-        .unwrap();
-
-    let client = Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    // get size from the head request
-    let response = client
-        .head(&url)
-        .send()
-        .map_err(|e| format!("failed to read headers for file because {e}"))?;
-    let total_size = response
-        .headers()
-        .get("content-length")
-        .ok_or("Content-Length header missing")?
-        .to_str()
-        .map_err(|e| format!("failed to read content length because {e}"))?
-        .parse::<u64>()
-        .map_err(|e| format!("failed to read total size because {e}"))?;
-    println!("File size for {} is {}", &file.file_name, total_size);
-
-    let d_file = File::create(&file.destination_path)
-        .map_err(|e| format!("failed to create file because {e}"))?;
-    d_file
-        .set_len(total_size)
-        .map_err(|e| format!("failed to create blank file because {e}"))?;
-    let d_file = Arc::new(Mutex::new(d_file));
-
-
-    // create a channel to receive download progress 
-    let (sender, receiver) = mpsc::channel::<DownloadProgress>();
 
     for start in (0..total_size).step_by(CHUNK_SIZE as usize) {
         let end = (start + CHUNK_SIZE - 1).min(total_size - 1);
         let client = client.clone();
         let d_file = Arc::clone(&d_file);
-
+        let sender = sender.clone();
         let url = url_copy.clone();
 
-        let sender = sender.clone();
-
         thread::spawn(move || {
-            match client
-                .get(&url)
+            match client.get(&url)
                 .header("Range", format!("bytes={start}-{end}"))
                 .send()
                 .and_then(|res| res.bytes()) {
                     Ok(response) => {
                         let mut d_file = d_file.lock().expect("failed to lock file");
-                        d_file.seek(SeekFrom::Start(start)).expect("Seek failed");
+                        d_file.seek(SeekFrom::Start(start)).expect("seek failed");
                         d_file.write_all(&response).expect("write failed");
-
                         sender.send(DownloadProgress{
                             download_id: record.id,
+                            downloaded: end - start as u64,
                             total_size,
-                            downloaded: end + 1,
-                        }).expect("failed to send percentage progress");
+                        });
                     }
-                    Err(e) => eprintln!("failed to download chunk: {e}");
+                    Err(e) => {
+                        println!("failed to download chunk because: {e}");
+                    }
                 }
-
-            let mut d_file = d_file
-                .lock()
-                .map_err(|e| format!("Mutex lock on the file failed: {e}"))?;
-            d_file
-                .seek(SeekFrom::Start(start))
-                .map_err(|e| format!("Seek failed: {e}"))?;
-            d_file
-                .write_all(&response)
-                .map_err(|e| format!("failed to write chunk because {e}"))?;
-
-            sender.send(DownloadProgress {
-                download_id: record.id,
-                total_size,
-                downloaded: end - start,
-            }).map_err(|e| format!("failed to send progress: {e}"))?;
-
-   
-
-            Ok::<(), String>(())
         });
-        handles.push(handle);
     }
 
-    // listen for the progress events
-    std::thread::spawn(move || {
-        for progress in receiver {
-            let window = window.lock().map_err(|e| format!("Failed to lock window: {e}")).unwrap();
-            window.emit("download-progress", progress).unwrap();
-        }
-    });
-
-    for handle in handles {
-        handle
-            .join()
-            .map_err(|e| format!("Thread joining failed: {e:?}"))?;
-    }
-
-    let duration = start_time.elapsed().as_secs_f64();
-    println!("finished download in: {duration}s");
-
-   /*
-    let window = window.lock().map_err(|e| format!("failed to lock window at the end: {e}"))?;
-     window
-         .emit(
-             "download-finished",
-             DownloadFinished {
-                 download_id: record.id,
-             },
-         )
-         .unwrap();
-   */
-
-    let download_stop_time = SystemTime::now();
-    let download_stop_time = download_stop_time
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let download_stop_time = download_stop_time.as_secs();
-
-    storage::update_download_record(record.id, "Finished", download_stop_time, total_size, &cfg)
-        .map_err(|e| format!("failed to update download record because {e}"))?;
-
-    Ok(())
-}
-
-
+    window.emit("download-finished", DownloadFinished{
+        download_id: record.id,
+    }).unwrap();
+       
+        println!("inished downloading");
+        Ok(())
+} 
+    
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
