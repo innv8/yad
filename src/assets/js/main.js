@@ -3,6 +3,10 @@ window.onload = () => {
 	getRecords();
 }
 
+function logInfo(message) {
+	let now = performance.now() * 1e6;
+	console.log(`${now} : ${message}`);
+}
 
 function convertToTime(timestamp) {
 	const date = new Date(timestamp * 1000);
@@ -97,7 +101,7 @@ async function getRecords() {
 
 		document.getElementById("download-records").innerHTML = htmlBody;
 	} catch (error) {
-		console.log(`Error: ${error}`);
+		logInfo(`Error: ${error}`);
 	}
 }
 
@@ -111,7 +115,7 @@ searchField.addEventListener("paste", async (event) => {
 		await invoke("download", { url: pastedContent });
 		// getRecords();
 	} else {
-		console.log(`invalid url: ${pastedContent}`);
+		logInfo(`invalid url: ${pastedContent}`);
 	}
 
 	searchField.value = '';
@@ -164,7 +168,9 @@ window.__TAURI__.event.listen("download-started", (event) => {
 
 	 let tBody = document.getElementById("download-records");
 	 tBody.insertBefore(row, tBody.firstChild);
+	logInfo("Download Started");
 });
+
 
 window.__TAURI__.event.listen("download-progress", (event) => {
 	const data = event.payload;
@@ -174,7 +180,7 @@ window.__TAURI__.event.listen("download-progress", (event) => {
 	let percentage = (currentSize / totalSize) * 100;
 	percentage = percentage.toFixed(0);
 		downloadProgress[data['downloadId']] += data['downloaded'];
-	console.log(`downloaded:: ${percentage}%`);
+	logInfo(`downloaded:: ${percentage}%`);
 	
 	let progressCell = document.getElementById(`progress-${data['downloadId']}`);
 	let status = percentage == 100 ? "success" : "info";
@@ -197,11 +203,11 @@ window.__TAURI__.event.listen("download-progress", (event) => {
 });
 
 window.__TAURI__.event.listen("download-finished", (event) => {
-	console.log(`Download Finished:: ${JSON.stringify(event.payload)}`);
+	logInfo(`Download Finished:: ${JSON.stringify(event.payload)}`);
 });
 
 window.__TAURI__.event.listen("download-message", (event) => {
-	console.log(`Download Message:: ${JSON.stringify(event.payload)}`);
+	logInfo(`Download Message:: ${JSON.stringify(event.payload)}`);
 });
 
 

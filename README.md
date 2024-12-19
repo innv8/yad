@@ -1,7 +1,17 @@
-# Tauri + Vanilla
+# Yet Another Downloader
 
-This template should help get you started developing with Tauri in vanilla HTML, CSS and Javascript.
+## Installation
 
-## Recommended IDE Setup
+#### Manual Installation
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+This project is built with [Rust](https://www.rust-lang.org/) and [Tauri](https://tauri.app/), therefore make sure they're both installed.
+
+```sh
+# install rust 
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# install tauri-cli
+cargo install tauri-cli 
+```
+
+
