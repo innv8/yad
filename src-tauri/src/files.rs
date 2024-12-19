@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, time::{SystemTime, UNIX_EPOCH}};
 use crate::{config, storage::DownloadRecord};
 
 #[derive(Debug, Clone)]
@@ -90,7 +90,7 @@ impl From<DownloadRecord> for File {
 
 #[derive(Debug, Clone)]
 pub struct File {
-    pub id: u64,
+    pub id: i64,
     pub file_url: String,
     pub file_name: String,
     pub file_type: FileType,
@@ -98,9 +98,9 @@ pub struct File {
     pub destination_dir: String,
     pub destination_path: String,
     pub file_size: u64,
-    pub download_start_time: i64,
-    pub download_stop_time: i64,
-    pub download_duration: i64,
+    pub download_start_time: u64,
+    pub download_stop_time: u64,
+    pub download_duration: u64,
     pub download_status: DownloadStatus
 }
 
@@ -139,6 +139,9 @@ impl File {
 
         let file_type = get_file_type(&extension);
         let (destination_dir, destination_path) = get_destination_path(file_name, cfg, &file_type);
+        let now = SystemTime::now();
+        let now = now.duration_since(UNIX_EPOCH).unwrap_or_default();
+        let now = now.as_secs();
 
         File {
             id: 0,
@@ -149,7 +152,7 @@ impl File {
             destination_dir,
             destination_path,
             file_size: 0,
-            download_start_time:0,
+            download_start_time:now,
             download_stop_time: 0,
             download_duration: 0,
             download_status: DownloadStatus::Pending,

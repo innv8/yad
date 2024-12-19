@@ -6,9 +6,9 @@ use serde::Serialize;
 
 use crate::{config::Config, files::File};
 
-#[derive(Debug,Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct DownloadRecord {
-    pub id: u64,
+    pub id: i64,
     pub file_url: String,
     pub file_name: String,
     pub file_type: String,
@@ -16,13 +16,13 @@ pub struct DownloadRecord {
     pub destination_dir: String,
     pub destination_path: String,
     pub file_size: u64,
-    pub download_start_time: i64,
-    pub download_stop_time: i64,
+    pub download_start_time: u64,
+    pub download_stop_time: u64,
     pub download_status: String,
 }
 
 impl From<File> for DownloadRecord {
-     fn from(f: File) -> Self {
+    fn from(f: File) -> Self {
         DownloadRecord {
             id: 0,
             file_url: f.file_url,
@@ -53,7 +53,9 @@ fn get_db(cfg: &Config) -> Result<Connection, Box<dyn std::error::Error>> {
     Ok(conn)
 }
 
-fn create_table(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
+pub fn create_table(cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    let conn = get_db(&cfg)?;
+
     let sql = r#"CREATE TABLE IF NOT EXISTS download_record (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
             file_url            TEXT NOT NULL UNIQUE,
@@ -72,8 +74,8 @@ fn create_table(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 pub fn read_download_records(cfg: &Config) -> Result<Vec<DownloadRecord>, Box<dyn Error>> {
+    create_table(cfg)?;
     let conn = get_db(&cfg)?;
-    create_table(&conn)?;
 
     let sql = r#"SELECT 
             id, file_url, file_name, file_type, extension,
@@ -110,8 +112,9 @@ pub fn search_by_url(
     url: &str,
     cfg: &Config,
 ) -> Result<DownloadRecord, Box<dyn std::error::Error>> {
+    create_table(cfg)?;
+
     let conn = get_db(&cfg)?;
-    create_table(&conn)?;
     let sql = r#"SELECT 
             id, file_url, file_name, file_type, extension,
             destination_dir, destination_path, file_size,
@@ -142,9 +145,10 @@ pub fn search_by_url(
 pub fn insert_record(
     record: &DownloadRecord,
     cfg: &Config,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<i64, Box<dyn std::error::Error>> {
+    create_table(cfg)?;
+
     let conn = get_db(&cfg)?;
-    create_table(&conn)?;
 
     let sql = r#"INSERT INTO download_record (
             file_url, file_name, file_type, extension, destination_dir, 
@@ -167,25 +171,27 @@ pub fn insert_record(
             record.download_status,
         ],
     )?;
+    let id: i64 = conn.last_insert_rowid();
 
-    Ok(())
+    Ok(id)
 }
 
 pub fn update_download_record(
-    file_url: &str,
+    id: i64,
     download_status: &str,
-    download_stop_time: i64,
+    download_stop_time: u64,
     file_size: u64,
     cfg: &Config,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    create_table(cfg)?;
     let conn = get_db(&cfg)?;
     let sql = r#"UPDATE download_record 
         SET download_status=?1, download_stop_time=?2, file_size=?3
-        WHERE file_url = ?4
+        WHERE id = ?4
         LIMIT 1;"#;
     match conn.execute(
         sql,
-        params![download_status, download_stop_time, file_size, file_url,],
+        params![download_status, download_stop_time, file_size, id,],
     ) {
         Ok(_) => {
             println!("UPDATED SUCCESSFULLY");
@@ -198,6 +204,7 @@ pub fn update_download_record(
 }
 
 pub fn delete_record(id: i64, cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    create_table(cfg)?;
     let conn = get_db(&cfg)?;
     let sql = "DELETE FROM download_record WHERE id=?1 LIMIT 1;";
     conn.execute(sql, params![id])?;
