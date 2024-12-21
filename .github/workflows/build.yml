@@ -13,10 +13,8 @@ jobs:
   build:
     strategy:
       matrix:
-        # os: [ubuntu-latest, macos-latest, windows-latest]
         os: [ubuntu-latest]
         arch: [x86_64]
-        # arch: [x86_64, aarch64, i686]
 
     runs-on: ubuntu-latest
 
