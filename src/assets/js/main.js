@@ -88,22 +88,32 @@ async function getRecords() {
 				</td>
 				<td>${item['file_type']}</td>
 				<td>
-					<a 
-						href="#" 
+					<span 
 						class="action-link btn btn-sm btn-outline-${actionClass} btn-block"
-						onclick="alert('hello')">
+						id="${item['id']}"
+						>
 						<i class="${icon}"></i>
-					</a>
+					</span>
 </td>
 			</tr>
 			`;
 		}
 
 		document.getElementById("download-records").innerHTML = htmlBody;
+		const actionLinkElements = document.getElementsByClassName("action-link");
+		for (let i = 0; i < actionLinkElements.length; i++) {
+			actionLinkElements[i].addEventListener("click", function() {
+				let path = data[i]['destination_path'];
+				const invoke = window.__TAURI__.core.invoke;
+				invoke("open_file", { path });
+			})
+		}
 	} catch (error) {
 		logInfo(`Error: ${error}`);
 	}
 }
+
+
 
 // Download 
 
@@ -166,8 +176,8 @@ window.__TAURI__.event.listen("download-started", (event) => {
 	let cellAction = document.createElement("td");
 	row.appendChild(cellAction);
 
-	 let tBody = document.getElementById("download-records");
-	 tBody.insertBefore(row, tBody.firstChild);
+	let tBody = document.getElementById("download-records");
+	tBody.insertBefore(row, tBody.firstChild);
 	logInfo("Download Started");
 });
 
@@ -181,9 +191,9 @@ window.__TAURI__.event.listen("download-progress", (event) => {
 	let totalSize = data['totalSize'];
 	let percentage = (currentSize / totalSize) * 100;
 	percentage = percentage.toFixed(0);
-		downloadProgress[data['downloadId']] += data['downloaded'];
+	downloadProgress[data['downloadId']] += data['downloaded'];
 	logInfo(`downloaded:: ${percentage}%`);
-	
+
 	let progressCell = document.getElementById(`progress-${data['downloadId']}`);
 	let status = percentage == 100 ? "success" : "info";
 
@@ -206,17 +216,51 @@ window.__TAURI__.event.listen("download-progress", (event) => {
 	}
 
 	let sizeCell = document.getElementById(`size-${data['downloadId']}`);
-	sizeCell.innerHTML =`${getSize(currentSize)} / ${getSize(totalSize)}`;
+	sizeCell.innerHTML = `${getSize(currentSize)} / ${getSize(totalSize)}`;
 
-});
-
-window.__TAURI__.event.listen("download-finished", (event) => {
-	logInfo(`Download Finished:: ${JSON.stringify(event.payload)}`);
-});
-
-window.__TAURI__.event.listen("download-message", (event) => {
-	logInfo(`Download Message:: ${JSON.stringify(event.payload)}`);
 });
 
 
 // End Downloads 
+
+function toggleTheme() {
+	let currentTheme = localStorage.getItem("theme");
+	console.log(`theme: ${currentTheme}`);
+	currentTheme = currentTheme == "dark" ? "light" : "dark";
+
+	if (currentTheme == "dark") {
+
+	}
+
+	console.log(`new theme: ${currentTheme}`);
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+	console.log(`loaded!!`);
+	const darkButton = document.getElementById("dark-button");
+	const lightButton = document.getElementById("light-button");
+
+	let currentTheme = localStorage.getItem("theme");
+	if (currentTheme == "dark") {
+		document.body.classList.add("dark-theme");
+		darkButton.style.display = "none";
+	} else {
+		document.body.classList.remove("dark-theme");
+		lightButton.style.display = "none";
+	}
+
+	darkButton.addEventListener("click", function() {
+		document.body.classList.add("dark-theme");
+		localStorage.setItem("theme", "dark");
+		darkButton.style.display = "none";
+		lightButton.style.display = "block";
+	});
+
+	lightButton.addEventListener("click", function() {
+		document.body.classList.remove("dark-theme");
+		localStorage.setItem("theme", "light");
+		lightButton.style.display = "none";
+		darkButton.style.display = "block";
+	});
+
+})
