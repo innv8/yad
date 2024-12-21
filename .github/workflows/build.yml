@@ -71,3 +71,9 @@ jobs:
           ls -lha
           ls -lha src-tauri/target/release
 
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: yad-${{ matrix.os }}-${{ matrix.arch }}
+          path: src-tauri/target/release/bundle
+
