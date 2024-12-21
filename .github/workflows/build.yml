@@ -21,7 +21,7 @@ jobs:
         uses: action-rs/toolchain@v1
         with:
           toolchain: stable
-          target: ${{ matrix.platform == "windows-latest" && 'x86_64-pc-windows-msvc' || '' }}
+          target: ${{ matrix.platform == 'windows-latest' && 'x86_64-pc-windows-msvc' || '' }}
           override: true
 
       - name: Install nodejs
