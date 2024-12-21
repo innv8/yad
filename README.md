@@ -1,5 +1,13 @@
 # Yet Another Downloader
 
+<p align="center">
+  <a href="https://skillicons.dev">
+    <img src="https://skillicons.dev/icons?i=rust,nodejs,tauri" />
+  </a>
+</p>
+
+---
+
 ![logo](./src-tauri/icons/white-bg.png)
 
 ---
