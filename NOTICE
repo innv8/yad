@@ -13,17 +13,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 Additional Credits:
-- This project includes code or resources from the following third-party projects:
-    - Rust			v1.83.0	(https://rust-lang.org)
-    - Tauri			v2		(https://tauri.app)
-	- Nodejs		v22.12	(https://nodejs.org)
-	- Serde			v1		(https://crates.io/crates/serde)
-	- Serde-JSON	v1		(https://crates.io/crates/serde-json)
-	- Chrono		v0.4.39	(https://crates.io/crates/chrono)
-	- Reqwest		v0.12.9 (https://crates.io/crates/reqwest)
-	- Rusqlite		v0.32.1 (https://crates.io/crates/rusqlite)
-	- Sys-Info		v0.9.1	(https://crates.io/crates/sys-info)
-	- Tokio			v1.42.0	(https://crates.io/crates/tokio)
+This project includes code or resources from the following third-party projects:
+- Rust v1.83.0 (https://rust-lang.org)
+- Tauri v2 (https://tauri.app)
+- Nodejs v22.12 (https://nodejs.org)
+- Serde v1 (https://crates.io/crates/serde)
+- Serde-JSON v1 (https://crates.io/crates/serde-json)
+- Chrono v0.4.39 (https://crates.io/crates/chrono)
+- Reqwest v0.12.9 (https://crates.io/crates/reqwest)
+- Rusqlite v0.32.1 (https://crates.io/crates/rusqlite)
+- Sys-Info v0.9.1 (https://crates.io/crates/sys-info)
+- Tokio	v1.42.0	(https://crates.io/crates/tokio)
 
 
 
