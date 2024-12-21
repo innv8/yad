@@ -1,6 +1,6 @@
 # Yet Another Downloader
 
-![logo](./src-tauri/icons/StoreLogo.png)
+![logo](./src-tauri/icons/white-bg.png)
 
 ---
 
