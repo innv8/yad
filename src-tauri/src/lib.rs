@@ -1,11 +1,11 @@
 use reqwest::blocking::Client;
 use serde::Serialize;
 use std::{
-    fs::{self,File},
+    fs::{self, File},
     io::{Seek, SeekFrom, Write},
     sync::{mpsc, Arc, Mutex},
     thread,
-    time::Instant,
+    time::{UNIX_EPOCH, SystemTime},
 };
 
 use tauri::{self, Emitter};
@@ -59,8 +59,7 @@ struct DownloadMessage<'a> {
 #[tauri::command]
 fn download(window: tauri::Window, url: String) -> Result<(), String> {
     let url_copy = url.clone();
-    
-    let start_time = Instant::now();
+
     // 1. read/write download to db and check it's id
     let cfg = config::Config::default();
     let file = files::File::new(&url, &cfg);
@@ -124,18 +123,19 @@ fn download(window: tauri::Window, url: String) -> Result<(), String> {
 
     println!("File size for {} is {}", &file.file_name, total_size);
 
-
     let d_file = File::create(&file.destination_path)
         .map_err(|e| format!("failed to create file because {e}"))?;
     d_file
-       .set_len(total_size)
+        .set_len(total_size)
         .map_err(|e| format!("failed to create blank file because {e}"))?;
-    let d_file = Arc::new(Mutex::new( d_file));
+    let d_file = Arc::new(Mutex::new(d_file));
 
     // create threads to download each chunk
     // create a channel to receive download progress
     let (sender, receiver) = mpsc::channel::<DownloadProgress>();
     let progress_window = window.clone();
+    let progress = Arc::new(Mutex::new(0u64));
+
     thread::spawn(move || {
         for downloaded in receiver {
             if let Err(e) = progress_window.emit("download-progress", downloaded) {
@@ -150,37 +150,51 @@ fn download(window: tauri::Window, url: String) -> Result<(), String> {
         let d_file = Arc::clone(&d_file);
         let sender = sender.clone();
         let url = url_copy.clone();
+        let progress = Arc::clone(&progress);
 
         thread::spawn(move || {
-            match client.get(&url)
+            match client
+                .get(&url)
                 .header("Range", format!("bytes={start}-{end}"))
                 .send()
-                .and_then(|res| res.bytes()) {
-                    Ok(response) => {
-                        let mut d_file = d_file.lock().expect("failed to lock file");
-                        d_file.seek(SeekFrom::Start(start)).expect("seek failed");
-                        d_file.write_all(&response).expect("write failed");
-                        sender.send(DownloadProgress{
-                            download_id: record.id,
-                            downloaded: end - start as u64,
-                            total_size,
-                        });
-                    }
-                    Err(e) => {
-                        println!("failed to download chunk because: {e}");
-                    }
+                .and_then(|res| res.bytes())
+            {
+                Ok(response) => {
+                    let mut d_file = d_file.lock().expect("failed to lock file");
+                    d_file.seek(SeekFrom::Start(start)).expect("seek failed");
+                    d_file.write_all(&response).expect("write failed");
+                    let mut progress = progress.lock().unwrap();
+                    *progress += response.len() as u64;
+
+                    let _ = sender.send(DownloadProgress {
+                        download_id: record.id,
+                        downloaded: *progress,
+                        total_size,
+                    });
                 }
+                Err(e) => {
+                    println!("failed to download chunk because: {e}");
+                }
+            }
         });
     }
 
-    window.emit("download-finished", DownloadFinished{
-        download_id: record.id,
-    }).unwrap();
-       
-        println!("inished downloading");
-        Ok(())
-} 
-    
+    // update the record in db
+    let now = SystemTime::now();
+    let now = now.duration_since(UNIX_EPOCH).unwrap_or_default();
+    let now = now.as_secs();
+    match storage::update_download_record(record.id, "Finished", now, total_size, &cfg) {
+        Ok(()) => {
+            println!("updated record {}", record.id);
+        }
+        Err(e) => {
+            println!("failed to update record {} because {}", record.id, e);
+        }
+    };
+
+    println!("finished downloading");
+    Ok(())
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

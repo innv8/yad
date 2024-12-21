@@ -64,11 +64,12 @@ impl Default for Config {
                 .join("AppData")
                 .join("Local")
                 .join("Temp")
+                .join(APP_NAME)
                 .to_str()
                 .unwrap_or("_")
                 .to_string(),
-            "Darwin" | "Linux" => String::from("/tmp"),
-            _ => String::from("/tmp"),
+            "Darwin" | "Linux" => String::from(format!("/tmp/{APP_NAME}")),
+            _ => format!("/tmp/{APP_NAME}").to_string(),
         };
 
         let download_dir = Path::new(&home_dir)

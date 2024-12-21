@@ -174,6 +174,8 @@ window.__TAURI__.event.listen("download-started", (event) => {
 
 window.__TAURI__.event.listen("download-progress", (event) => {
 	const data = event.payload;
+	console.log(`download-progress:: ${JSON.stringify(data)}`);
+
 	let currentSize = downloadProgress[data['downloadId']];
 	currentSize += data['downloaded'];
 	let totalSize = data['totalSize'];
@@ -184,6 +186,7 @@ window.__TAURI__.event.listen("download-progress", (event) => {
 	
 	let progressCell = document.getElementById(`progress-${data['downloadId']}`);
 	let status = percentage == 100 ? "success" : "info";
+
 	progressCell.innerHTML = `
 	<div
 		class="progress"
@@ -198,8 +201,13 @@ window.__TAURI__.event.listen("download-progress", (event) => {
 	</div>
 	`;
 
+	if (percentage == 100) {
+		getRecords();
+	}
+
 	let sizeCell = document.getElementById(`size-${data['downloadId']}`);
-	sizeCell.innerHTML = getSize(currentSize);
+	sizeCell.innerHTML =`${getSize(currentSize)} / ${getSize(totalSize)}`;
+
 });
 
 window.__TAURI__.event.listen("download-finished", (event) => {
