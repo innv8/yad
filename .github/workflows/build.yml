@@ -46,5 +46,28 @@ jobs:
         run: rustup target add ${{ matrix.arch }}-unknown-linux-gnu ${{ matrix.arch }}-pc-windows-msvc ${{ matrix.arch }}-apple-darwin
 
       - name: Building YaD app for ${{ matrix.os }} and ${{ matrix.arch }}
-        run: ls -lh
+        run: |
+          ls -lh
+          if [ "${{ matrix.os  }}" == "ubuntu-latest" ]; then
+            cross build --target ${matrix.arch}-unknown-linux-gnu --release
+          elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+            cross build --target ${matrix.arch}-apple-darwin --release
+          else
+            cross build --target ${matrix-arch}-pc-windows-msvc --release
+          fi
+
+      - name: Build Tauri App 
+        run: npm run tauri build -- --release
+
+      - name: Package
+        run: |
+          if [ "${{matrix.os}}" == "ubuntu-latest" ]; then
+            npm run tauri build -- --release --target deb
+          elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+            npm run tauri build -- --release --target dmg
+          elif [ "${{ matrix.os }}" == "windows-latest" ]; then
+            npm run tauri build -- --release --target msi
+          fi
+          ls -lha
+          ls -lha src-tauri/target/release
 
