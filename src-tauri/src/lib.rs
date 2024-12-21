@@ -12,7 +12,6 @@ use std::{
 use tauri::{self, Emitter};
 
 pub mod config;
-pub mod download;
 pub mod files;
 pub mod storage;
 

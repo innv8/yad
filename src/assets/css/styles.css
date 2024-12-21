@@ -1,14 +1,11 @@
 /* Default theme: light */
 :root {
- /* --background-color: #f8f9fa;
+  --background-color: #f8f9fa;
   --text-color: #212529;
   --placeholder-color: #adb5bd;
-  --border-color: #ccced0; */
+  --border-color: #ccced0; 
   
- --background-color: #212529;
-  --text-color: #fff;
-  --placeholder-color: #6c757d;
-  --border-color: #343a40;
+
 
 }
 
@@ -114,4 +111,8 @@ input.search::placeholder {
   color: var(--placeholder-color);
   font-size: 1em;
   font-style: italic;
+}
+
+.theme-icon {
+	color: var(--text-color) !important;
 }

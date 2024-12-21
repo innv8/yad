@@ -105,7 +105,7 @@ async function getRecords() {
 			actionLinkElements[i].addEventListener("click", function() {
 				let path = data[i]['destination_path'];
 				const invoke = window.__TAURI__.core.invoke;
-				 invoke("open_file", { path });
+				invoke("open_file", { path });
 			})
 		}
 	} catch (error) {
@@ -220,15 +220,47 @@ window.__TAURI__.event.listen("download-progress", (event) => {
 
 });
 
-window.__TAURI__.event.listen("download-finished", (event) => {
-	logInfo(`Download Finished:: ${JSON.stringify(event.payload)}`);
-});
-
-window.__TAURI__.event.listen("download-message", (event) => {
-	logInfo(`Download Message:: ${JSON.stringify(event.payload)}`);
-});
-
 
 // End Downloads 
 
+function toggleTheme() {
+	let currentTheme = localStorage.getItem("theme");
+	console.log(`theme: ${currentTheme}`);
+	currentTheme = currentTheme == "dark" ? "light" : "dark";
 
+	if (currentTheme == "dark") {
+
+	}
+
+	console.log(`new theme: ${currentTheme}`);
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+	console.log(`loaded!!`);
+	const darkButton = document.getElementById("dark-button");
+	const lightButton = document.getElementById("light-button");
+
+	let currentTheme = localStorage.getItem("theme");
+	if (currentTheme == "dark") {
+		document.body.classList.add("dark-theme");
+		darkButton.style.display = "none";
+	} else {
+		document.body.classList.remove("dark-theme");
+		lightButton.style.display = "none";
+	}
+
+	darkButton.addEventListener("click", function() {
+		document.body.classList.add("dark-theme");
+		localStorage.setItem("theme", "dark");
+		darkButton.style.display = "none";
+		lightButton.style.display = "block";
+	});
+
+	lightButton.addEventListener("click", function() {
+		document.body.classList.remove("dark-theme");
+		localStorage.setItem("theme", "light");
+		lightButton.style.display = "none";
+		darkButton.style.display = "block";
+	});
+
+})
