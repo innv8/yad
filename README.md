@@ -42,7 +42,7 @@ cargo tauri build --no-bundle --config src-tauri/tauri.conf.json
 Once done, double click on the binary to open. Below are sample screenshots.
 
 ![white-screenshot](./src-tauri/icons/white-screenshot.png)
-![black-screenshot](./src-tauri/icons/black-screenshot)
+![black-screenshot](./src-tauri/icons/black-screenshot.png)
 
 ---
 
