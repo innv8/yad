@@ -107,10 +107,11 @@ input.search {
 
 input.search:focus {
   border: none;
+	background-color: var(--background-color);
 }
 
 input.search::placeholder {
   color: var(--placeholder-color);
-  font-size: 0.9em;
+  font-size: 1em;
   font-style: italic;
 }

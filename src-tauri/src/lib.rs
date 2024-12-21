@@ -3,9 +3,10 @@ use serde::Serialize;
 use std::{
     fs::{self, File},
     io::{Seek, SeekFrom, Write},
+    process::Command,
     sync::{mpsc, Arc, Mutex},
     thread,
-    time::{UNIX_EPOCH, SystemTime},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use tauri::{self, Emitter};
@@ -42,11 +43,7 @@ struct DownloadProgress {
     downloaded: u64,
 }
 
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct DownloadFinished {
-    download_id: i64,
-}
+
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -121,8 +118,6 @@ fn download(window: tauri::Window, url: String) -> Result<(), String> {
         .parse::<u64>()
         .map_err(|e| format!("failed to parse content length: {e}"))?;
 
-    println!("File size for {} is {}", &file.file_name, total_size);
-
     let d_file = File::create(&file.destination_path)
         .map_err(|e| format!("failed to create file because {e}"))?;
     d_file
@@ -138,7 +133,7 @@ fn download(window: tauri::Window, url: String) -> Result<(), String> {
 
     thread::spawn(move || {
         for downloaded in receiver {
-            if let Err(e) = progress_window.emit("download-progress", downloaded) {
+            if let Err(_) = progress_window.emit("download-progress", downloaded) {
                 println!("failed to emit download progress");
             }
         }
@@ -164,7 +159,8 @@ fn download(window: tauri::Window, url: String) -> Result<(), String> {
                     d_file.seek(SeekFrom::Start(start)).expect("seek failed");
                     d_file.write_all(&response).expect("write failed");
                     let mut progress = progress.lock().unwrap();
-                    *progress += response.len() as u64;
+                    // *progress += response.len() as u64;
+                    *progress += (end - start) as u64;
 
                     let _ = sender.send(DownloadProgress {
                         download_id: record.id,
@@ -196,11 +192,28 @@ fn download(window: tauri::Window, url: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn open_file(path: String) -> Result<(), String> {
+    let cfg = config::Config::default();
+    let os: &str = &cfg.os;
+    let command = match os {
+        "Windows" => "explorer",
+        "Darwin" => "open",
+        _ => "nautilus",
+    };
+
+    Command::new(command)
+        .arg(path)
+        .output()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![fetch_records, download])
+        .invoke_handler(tauri::generate_handler![fetch_records, download, open_file])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
