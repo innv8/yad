@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - dev
-  merge:
-    branches:
-      - main 
 
 jobs:
   build:
