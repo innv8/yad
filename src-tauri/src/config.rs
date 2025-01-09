@@ -4,7 +4,7 @@ use sys_info;
 pub const APP_NAME: &str = "Yad";
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Config {
     pub os: String,
     pub user: String,
@@ -40,20 +40,20 @@ impl Default for Config {
             "Windows" => _home_dir
                 .join("AppData")
                 .join("Local")
-                .join(&APP_NAME)
+                .join(APP_NAME)
                 .to_str()
                 .unwrap_or("_")
                 .to_string(),
             "Darwin" => _home_dir
                 .join("Library")
                 .join("Application Support")
-                .join(&APP_NAME)
+                .join(APP_NAME)
                 .to_str()
                 .unwrap_or("_")
                 .to_string(),
             "Linux" => _home_dir
                 .join(".config")
-                .join(&APP_NAME)
+                .join(APP_NAME)
                 .to_str()
                 .unwrap_or("_")
                 .to_string(),
@@ -69,13 +69,13 @@ impl Default for Config {
                 .to_str()
                 .unwrap_or("_")
                 .to_string(),
-            "Darwin" | "Linux" => String::from(format!("/tmp/{APP_NAME}")),
+            "Darwin" | "Linux" => format!("/tmp/{APP_NAME}"),
             _ => format!("/tmp/{APP_NAME}").to_string(),
         };
 
         let download_dir = Path::new(&home_dir)
             .join("Downloads")
-            .join(&APP_NAME)
+            .join(APP_NAME)
             .to_str()
             .unwrap_or("_")
             .to_string();

@@ -1,10 +1,13 @@
 use std::fs;
-pub(crate) use std::{error::Error, path::Path};
+use std::{error::Error, path::Path};
 
 use rusqlite::{params, Connection};
 use serde::Serialize;
 
-use crate::{config::Config, files::{DownloadStatus, File}};
+use crate::{
+    config::Config,
+    files::{DownloadStatus, File},
+};
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct DownloadRecord {
@@ -19,6 +22,7 @@ pub struct DownloadRecord {
     pub download_start_time: u64,
     pub download_stop_time: u64,
     pub download_status: String,
+    pub downloaded_percentage: f32,
 }
 
 impl From<File> for DownloadRecord {
@@ -35,6 +39,7 @@ impl From<File> for DownloadRecord {
             download_start_time: f.download_start_time,
             download_stop_time: f.download_stop_time,
             download_status: f.download_status.to_string(),
+            downloaded_percentage: 0.0,
         }
     }
 }
@@ -42,20 +47,18 @@ impl From<File> for DownloadRecord {
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct Chunk {
     pub id: i64,
-    pub chunk_position: i64,
     pub record_id: i64,
-    pub start :u64,
+    pub start: u64,
     pub end: u64,
     pub status: String,
 }
 
 impl Chunk {
-    pub fn new(chunk_position: i64, record_id: i64, start: u64, end: u64, status: DownloadStatus) -> Self {
-        let status = status.to_string();
+    pub fn new(record_id: i64, start: u64, end: u64) -> Self {
+        let status = "InProgress".to_string();
         let id = 0;
         Chunk {
             id,
-            chunk_position,
             record_id,
             start,
             end,
@@ -64,9 +67,15 @@ impl Chunk {
     }
 }
 
-fn get_db(cfg: &Config) -> Result<Connection, Box<dyn std::error::Error>> {
+#[derive(Debug)]
+struct ChunkCount {
+    count: i32,
+    status: String,
+}
+
+fn get_db(cfg: &Config) -> Result<Connection, Box<dyn Error>> {
     let db_path = Path::new(&cfg.config_dir);
-    fs::create_dir_all(&db_path)?;
+    fs::create_dir_all(db_path)?;
     let db_path = db_path
         .join("yad.db")
         .to_str()
@@ -81,8 +90,8 @@ fn get_db(cfg: &Config) -> Result<Connection, Box<dyn std::error::Error>> {
     Ok(conn)
 }
 
-pub fn create_table(cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
-    let conn = get_db(&cfg)?;
+pub fn create_tables(cfg: &Config) -> Result<(), Box<dyn Error>> {
+    let conn = get_db(cfg)?;
 
     let sql = r#"
         CREATE TABLE IF NOT EXISTS download_record (
@@ -100,11 +109,10 @@ pub fn create_table(cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
         )"#;
     conn.execute(sql, [])?;
 
-    // create the child table for chunks 
+    // create the child table for chunks
     let sql = r#"
         CREATE TABLE IF NOT EXISTS chunk (
            id               INTEGER PRIMARY KEY AUTOINCREMENT,
-           chunk_position   INTEGER NOT NULL,
            record_id        INTEGER NOT NULL,
            start            INTEGER NOT NULL,
            end              INTEGER NOT NULL,
@@ -120,10 +128,10 @@ pub fn create_table(cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 pub fn read_download_records(cfg: &Config) -> Result<Vec<DownloadRecord>, Box<dyn Error>> {
-    create_table(cfg)?;
-    let conn = get_db(&cfg)?;
+    let conn = get_db(cfg)?;
 
-    let sql = r#"SELECT 
+    let sql = r#"
+        SELECT 
             id, file_url, file_name, file_type, extension,
             destination_dir, destination_path, file_size,
             download_start_time, download_stop_time,
@@ -145,23 +153,41 @@ pub fn read_download_records(cfg: &Config) -> Result<Vec<DownloadRecord>, Box<dy
             download_start_time: row.get(8)?,
             download_stop_time: row.get(9)?,
             download_status: row.get(10)?,
+            downloaded_percentage: 0.0,
         })
     })?;
     let mut records = Vec::new();
     for r in record_iter {
-        records.push(r?);
+        let mut _r = r?;
+
+        // check chunks and their statuses if the status == 'Pending'
+        let (pending, finished, failed) = count_chunks(_r.id, cfg).unwrap();
+
+        let downloaded_percentage: f32 = (finished as f32 / (pending + finished + failed) as f32) * 100.0;
+        let mut status = "Pending";
+        
+        if failed > 0 {
+            status = "Failed";
+        } else if pending == 0 {
+            status = "Finished";
+        }
+
+        _r.download_status = status.to_string();
+        _r.downloaded_percentage = downloaded_percentage;
+
+        // update the download record with the new status.
+        // update_download_record(_r.id, status, _r.download_stop_time, _r.file_size, cfg).unwrap();
+
+
+        records.push(_r);
     }
     Ok(records)
 }
 
-pub fn search_by_url(
-    url: &str,
-    cfg: &Config,
-) -> Result<DownloadRecord, Box<dyn std::error::Error>> {
-    create_table(cfg)?;
-
-    let conn = get_db(&cfg)?;
-    let sql = r#"SELECT 
+pub fn search_by_url(url: &str, cfg: &Config) -> Result<DownloadRecord, Box<dyn Error>> {
+    let conn = get_db(cfg)?;
+    let sql = r#"
+        SELECT 
             id, file_url, file_name, file_type, extension,
             destination_dir, destination_path, file_size,
             download_start_time, download_stop_time,
@@ -183,25 +209,23 @@ pub fn search_by_url(
             download_start_time: row.get(8)?,
             download_stop_time: row.get(9)?,
             download_status: row.get(10)?,
+            downloaded_percentage: 0.0,
         })
     })?;
     Ok(record)
 }
 
-pub fn insert_record(
-    record: &DownloadRecord,
-    cfg: &Config,
-) -> Result<i64, Box<dyn std::error::Error>> {
-    create_table(cfg)?;
+pub fn insert_record(record: &DownloadRecord, file_size: u64, cfg: &Config) -> Result<i64, Box<dyn Error>> {
+    let conn = get_db(cfg)?;
 
-    let conn = get_db(&cfg)?;
-
-    let sql = r#"INSERT INTO download_record (
+    let sql = r#"
+        INSERT INTO download_record (
             file_url, file_name, file_type, extension, destination_dir, 
-            destination_path, file_size, download_start_time, download_stop_time, 
-            download_status
+            destination_path, file_size, download_start_time, 
+            download_stop_time, download_status
             )
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"#;
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+        "#;
     conn.execute(
         sql,
         params![
@@ -211,7 +235,7 @@ pub fn insert_record(
             record.extension,
             record.destination_dir,
             record.destination_path,
-            record.file_size,
+            file_size,
             record.download_start_time,
             record.download_stop_time,
             record.download_status,
@@ -228,10 +252,10 @@ pub fn update_download_record(
     download_stop_time: u64,
     file_size: u64,
     cfg: &Config,
-) -> Result<(), Box<dyn std::error::Error>> {
-    create_table(cfg)?;
-    let conn = get_db(&cfg)?;
-    let sql = r#"UPDATE download_record 
+) -> Result<(), Box<dyn Error>> {
+    let conn = get_db(cfg)?;
+    let sql = r#"
+        UPDATE download_record 
         SET download_status=?1, download_stop_time=?2, file_size=?3
         WHERE id = ?4
         LIMIT 1;"#;
@@ -243,16 +267,124 @@ pub fn update_download_record(
             println!("UPDATED SUCCESSFULLY");
         }
         Err(e) => {
-            println!("FAILED TO UPDATE BECAUSE {}", e);
+            eprintln!("FAILED TO UPDATE BECAUSE {}", e);
         }
     };
     Ok(())
 }
 
-pub fn delete_record(id: i64, cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
-    create_table(cfg)?;
-    let conn = get_db(&cfg)?;
-    let sql = "DELETE FROM download_record WHERE id=?1 LIMIT 1;";
+pub fn delete_record(id: i64, cfg: &Config) -> Result<(), Box<dyn Error>> {
+    let conn = get_db(cfg)?;
+    let sql = r#"
+        DELETE FROM download_record 
+        WHERE id=?1 LIMIT 1;
+    "#;
     conn.execute(sql, params![id])?;
     Ok(())
 }
+
+pub fn save_chunk(chunk: &Chunk, cfg: &Config) -> Result<i64, Box<dyn Error>> {
+    let conn = get_db(cfg)?;
+    println!("======= inserting into chunk with data: {:?}", chunk);
+    let sql = r#"
+        INSERT INTO chunk (
+            record_id, start, end, status
+        )
+        VALUES (?, ?, ?, ?)
+        "#;
+    conn.execute(
+        sql,
+        params![chunk.record_id, chunk.start, chunk.end, chunk.status],
+    )?;
+    let id: i64 = conn.last_insert_rowid();
+    Ok(id)
+}
+
+pub fn update_chunk(
+    record_id: i64,
+    start: u64,
+    status: &str,
+    cfg: &Config,
+) -> Result<(), Box<dyn Error>> {
+    let conn = get_db(cfg)?;
+    let sql = r#"
+        UPDATE chunk 
+        SET status=?1 
+        WHERE record_id = ?2
+            AND start = ?3
+        LIMIT 1;
+        "#;
+    conn.execute(sql, params![status, record_id, start])?;
+    Ok(())
+}
+
+pub fn fetch_chunks(record_id: i64, cfg: &Config) -> Result<Vec<Chunk>, Box<dyn Error>> {
+    let conn = get_db(cfg)?;
+    let sql = r#"
+        SELECT (
+            id, record_id, start, end, status
+        )
+        FROM chunk
+        WHERE record_id = ?1 
+        ORDER BY start ASC;
+        "#;
+    let mut stmt = conn.prepare(sql)?;
+    let record_iter = stmt.query_map(params![record_id], |row| {
+        Ok(Chunk {
+            id: row.get(0)?,
+            record_id: row.get(1)?,
+            start: row.get(2)?,
+            end: row.get(3)?,
+            status: row.get(4)?,
+        })
+    })?;
+    let mut chunks = Vec::new();
+    for r in record_iter {
+        chunks.push(r?);
+    }
+    Ok(chunks)
+}
+
+/// Count summaries of chunks for the files. We count how many chunks are pending, successful and
+/// failed to determine the status and final state of the download.
+///
+/// # Arguments
+/// - `record_id`: The download record id.
+/// - `cfg`: Configs.
+///
+/// # Return
+/// - `(i32, i32, i32)`: number of pending, successful and failed chunks.
+pub fn count_chunks(record_id: i64, cfg: &Config) -> Result<(i32, i32, i32), Box<dyn Error>> {
+    let conn = get_db(cfg)?;
+    let sql = r#"
+        SELECT COUNT(id), status
+        FROM chunk
+        WHERE record_id = ?1
+        GROUP BY status;
+        "#;
+    let mut stmt = conn.prepare(sql)?;
+    let record_iter = stmt.query_map(params![record_id], |row| {
+        Ok(ChunkCount {
+            count: row.get(0)?,
+            status: row.get(1)?,
+        })
+    })?;
+
+    let mut pending: i32 = 0;
+    let mut finished: i32 = 0;
+    let mut failed: i32 = 0;
+    for record in record_iter {
+        let r = record?;
+        println!("status={}, count: {}", r.status, r.count);
+        if r.status == "Pending" {
+            pending = r.count;
+        } else if r.status == "Finished" {
+            finished = r.count;
+        } else {
+            failed = r.count;
+        }
+    }
+    println!("---- pending: {pending}, finished: {finished}, failed: {failed}");
+    Ok((pending, finished, failed))
+}
+

@@ -43,8 +43,6 @@ struct DownloadProgress {
     downloaded: u64,
 }
 
-
-
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DownloadMessage<'a> {
@@ -59,18 +57,38 @@ fn download(window: tauri::Window, url: String) -> Result<(), String> {
 
     // 1. read/write download to db and check it's id
     let cfg = config::Config::default();
+
+    // get file size
+
+    let client = Client::new();
+    let total_size = client
+        .head(&url)
+        .send()
+        .map_err(|e| format!("failed to send head request: {e}"))?
+        .headers()
+        .get(reqwest::header::CONTENT_LENGTH)
+        .ok_or("Content-Length header missing")?
+        .to_str()
+        .map_err(|e| format!("invalid content length header: {e}"))?
+        .parse::<u64>()
+        .map_err(|e| format!("failed to parse content length: {e}"))?;
+
     let file = files::File::new(&url, &cfg);
     let mut record = storage::search_by_url(&url, &cfg).unwrap_or_default();
     fs::create_dir_all(&file.destination_dir)
         .map_err(|e| format!("failed to create destination dir: {e:?}"))?;
 
-    let download_id = &record.id;
 
     // if it does not exist, create it
-    if *download_id == 0 {
+    if record.id == 0 {
+        println!("record does not exists. create it with size: {total_size}");
         let dr = storage::DownloadRecord::from(file.clone());
-        let download_id = storage::insert_record(&dr, &cfg).unwrap_or_default();
-        record.id = download_id;
+        record.id = match storage::insert_record(&dr, total_size, &cfg){
+            Ok(id) => id,
+            Err(e) => {
+                panic!("failed to insert download record because {e}");
+            }
+        };
     }
 
     if record.download_status == *"Finished" {
@@ -103,27 +121,19 @@ fn download(window: tauri::Window, url: String) -> Result<(), String> {
         )
         .unwrap();
 
-    let client = Client::new();
-
-    // get size from the head request
-    let total_size = client
-        .head(&url)
-        .send()
-        .map_err(|e| format!("failed to send head request: {e}"))?
-        .headers()
-        .get(reqwest::header::CONTENT_LENGTH)
-        .ok_or("Content-Length header missing")?
-        .to_str()
-        .map_err(|e| format!("invalid content length header: {e}"))?
-        .parse::<u64>()
-        .map_err(|e| format!("failed to parse content length: {e}"))?;
-
     let d_file = File::create(&file.destination_path)
         .map_err(|e| format!("failed to create file because {e}"))?;
     d_file
         .set_len(total_size)
         .map_err(|e| format!("failed to create blank file because {e}"))?;
     let d_file = Arc::new(Mutex::new(d_file));
+
+    // Create chunks in the db.
+    for start in (0..total_size).step_by(CHUNK_SIZE as usize) {
+        let end = (start + CHUNK_SIZE - 1).min(total_size - 1);
+        let chunk = storage::Chunk::new(record.id, start, end);
+        storage::save_chunk(&chunk, &cfg).unwrap();
+    }
 
     // create threads to download each chunk
     // create a channel to receive download progress
@@ -133,7 +143,10 @@ fn download(window: tauri::Window, url: String) -> Result<(), String> {
 
     thread::spawn(move || {
         for downloaded in receiver {
-            if progress_window.emit("download-progress", downloaded).is_err() {
+            if progress_window
+                .emit("download-progress", downloaded)
+                .is_err()
+            {
                 println!("failed to emit download progress");
             }
         }
@@ -141,6 +154,7 @@ fn download(window: tauri::Window, url: String) -> Result<(), String> {
 
     for start in (0..total_size).step_by(CHUNK_SIZE as usize) {
         let end = (start + CHUNK_SIZE - 1).min(total_size - 1);
+
         let client = client.clone();
         let d_file = Arc::clone(&d_file);
         let sender = sender.clone();
@@ -148,6 +162,8 @@ fn download(window: tauri::Window, url: String) -> Result<(), String> {
         let progress = Arc::clone(&progress);
 
         thread::spawn(move || {
+            let cfg = config::Config::default();
+
             match client
                 .get(&url)
                 .header("Range", format!("bytes={start}-{end}"))
@@ -168,28 +184,22 @@ fn download(window: tauri::Window, url: String) -> Result<(), String> {
                         downloaded: *progress,
                         total_size,
                     });
+                    println!(">>>>>> downloaded {} of {}", *progress, total_size);
+
+                    // update the status of the chunk
+                    storage::update_chunk(record.id, start, "Finished", &cfg).unwrap();
                 }
                 Err(e) => {
                     println!("failed to download chunk because: {e}");
+                    storage::update_chunk(record.id, start, "Failed", &cfg).unwrap();
                 }
             }
         });
     }
 
-    // update the record in db
-    let now = SystemTime::now();
-    let now = now.duration_since(UNIX_EPOCH).unwrap_or_default();
-    let now = now.as_secs();
-    match storage::update_download_record(record.id, "Finished", now, total_size, &cfg) {
-        Ok(()) => {
-            println!("updated record {}", record.id);
-        }
-        Err(e) => {
-            println!("failed to update record {} because {}", record.id, e);
-        }
-    };
+    // because we download in threads, we will confirm the download is done once front end sends a
+    // request to list downloads.
 
-    println!("finished downloading");
     Ok(())
 }
 
@@ -212,6 +222,17 @@ async fn open_file(path: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // when loading the application, create tables.
+    let cfg = config::Config::default();
+    match storage::create_tables(&cfg) {
+        Ok(()) => {
+            println!("created tables successfully");
+        }
+        Err(e) => {
+            panic!("Failed to create tables because {e}");
+        }
+    };
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![fetch_records, download, open_file])
