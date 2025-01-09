@@ -81,6 +81,20 @@ struct ChunkCount {
 }
 
 /// This function gets the db connection for use in all functions.
+///
+/// # Arguments
+/// - `cfg`: A `Config` instance.
+///
+/// # Returns
+/// This function returns a `Result` containing either:
+/// - `Ok(rusqlite::Connection)`: The connection to the db.
+/// - `Err(dyn std::error::Error)`: An error if any error occurs.
+///
+/// # Example
+/// ```rust 
+/// let cfg = config::Config::default();
+/// let conn = match get_db(&cfg)?;
+/// ```
 fn get_db(cfg: &Config) -> Result<Connection, Box<dyn Error>> {
     let db_path = Path::new(&cfg.config_dir);
     fs::create_dir_all(db_path)?;
@@ -99,7 +113,25 @@ fn get_db(cfg: &Config) -> Result<Connection, Box<dyn Error>> {
 }
 
 /// This function creates the two tables and creates the relationships.
-/// Ideally, it should create the database tables ones.
+/// Ideally, it should create the database tables ones. If this function fails, stop the
+/// application.
+///
+/// # Arguments
+/// - `cfg`: An instance of `Config`
+///
+/// # Returns
+/// This function returns a `Result` containing either:
+/// - `Ok(())`: An emptu tuple if everything is ok.
+/// - `Err(Box<dyn std::error::Error)`: An error in case it occurs.
+///
+/// # Example
+/// ```rust 
+/// let cfg = config::Config::default();
+/// match create_tables(&cfg) {
+///     Ok(()) => println!("tables created"),
+///     Err(e) => panic!("failed to create tables because {e}")
+/// };
+/// ````
 pub fn create_tables(cfg: &Config) -> Result<(), Box<dyn Error>> {
     let conn = get_db(cfg)?;
 
@@ -139,6 +171,27 @@ pub fn create_tables(cfg: &Config) -> Result<(), Box<dyn Error>> {
 
 /// This function fetches the saved download records to be shown on the UI. It also verifies how
 /// many chunks have been downloaded and if any are pending/ have failed.
+///
+/// # Arguments
+/// - `cfg`: An instance of Configs
+///
+/// # Returns
+/// This function returns a `Result` containing either:
+/// - `Ok(Vec<DownloadRecord>)`: an array of download records.
+/// - `Err(Bix<dyn std::error::Error>)`: An error if it occurred.
+///
+/// # Example
+/// ```rust 
+/// let cfg = config::Config::default();
+/// let download_records = match storage::read_download_records(&cfg) {
+///     Ok(records) => records,
+///     Err(e) => {
+///         println!("failed to read download records because {e}");
+///         let r: Vec<storage::DownloadRecord> = Vec::new();
+///         r
+///     }
+/// };
+/// ```
 pub fn read_download_records(cfg: &Config) -> Result<Vec<DownloadRecord>, Box<dyn Error>> {
     let conn = get_db(cfg)?;
 
@@ -199,6 +252,24 @@ pub fn read_download_records(cfg: &Config) -> Result<Vec<DownloadRecord>, Box<dy
 /// This function checks whether a file exists in the db from its url. This is to prevent duplicate
 /// downloads. IN future updates, the user should be able to delete the file from the list of
 /// downloads.
+///
+/// # Arguments
+/// - `url`: The url pointing to the file.
+/// - `cfg`: An instance of configs.
+///
+/// # Returns
+/// This function returns a `Result` containing either:
+/// - `Ok(storage::DownloadRecord)`: A download record after selecting.
+/// - `Err(Box<dyn std::error::Error)`: an error in case the select fails or the record does not
+/// exist in the database.
+///
+/// # Example
+/// ```rust 
+/// let cfg = config::Config::default();
+/// let file_url = "https://example.com/super-secret-file.pdf";
+///
+/// let download_record = storage::search_by_url(file_url, &cfg).unwrap_or_default();
+/// ```
 pub fn search_by_url(url: &str, cfg: &Config) -> Result<DownloadRecord, Box<dyn Error>> {
     let conn = get_db(cfg)?;
     let sql = r#"
