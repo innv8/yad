@@ -4,7 +4,7 @@ pub(crate) use std::{error::Error, path::Path};
 use rusqlite::{params, Connection};
 use serde::Serialize;
 
-use crate::{config::Config, files::File};
+use crate::{config::Config, files::{DownloadStatus, File}};
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct DownloadRecord {
@@ -39,6 +39,31 @@ impl From<File> for DownloadRecord {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct Chunk {
+    pub id: i64,
+    pub chunk_position: i64,
+    pub record_id: i64,
+    pub start :u64,
+    pub end: u64,
+    pub status: String,
+}
+
+impl Chunk {
+    pub fn new(chunk_position: i64, record_id: i64, start: u64, end: u64, status: DownloadStatus) -> Self {
+        let status = status.to_string();
+        let id = 0;
+        Chunk {
+            id,
+            chunk_position,
+            record_id,
+            start,
+            end,
+            status,
+        }
+    }
+}
+
 fn get_db(cfg: &Config) -> Result<Connection, Box<dyn std::error::Error>> {
     let db_path = Path::new(&cfg.config_dir);
     fs::create_dir_all(&db_path)?;
@@ -50,13 +75,17 @@ fn get_db(cfg: &Config) -> Result<Connection, Box<dyn std::error::Error>> {
 
     println!("db path: {}", &db_path);
     let conn = Connection::open(&db_path)?;
+
+    // enable relationships in sqlite3
+    conn.execute("PRAGMA foreign_keys = ON;", [])?;
     Ok(conn)
 }
 
 pub fn create_table(cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
     let conn = get_db(&cfg)?;
 
-    let sql = r#"CREATE TABLE IF NOT EXISTS download_record (
+    let sql = r#"
+        CREATE TABLE IF NOT EXISTS download_record (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
             file_url            TEXT NOT NULL UNIQUE,
             file_name           TEXT NOT NULL,
@@ -69,6 +98,23 @@ pub fn create_table(cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
             download_stop_time  INTEGER NULL,
             download_status     TEXT NOT NULL    
         )"#;
+    conn.execute(sql, [])?;
+
+    // create the child table for chunks 
+    let sql = r#"
+        CREATE TABLE IF NOT EXISTS chunk (
+           id               INTEGER PRIMARY KEY AUTOINCREMENT,
+           chunk_position   INTEGER NOT NULL,
+           record_id        INTEGER NOT NULL,
+           start            INTEGER NOT NULL,
+           end              INTEGER NOT NULL,
+           status           TEXT NOT NULL,
+
+           FOREIGN KEY (record_id) 
+                REFERENCES download_record(id)
+                ON DELETE CASCADE
+        );
+        "#;
     conn.execute(sql, [])?;
     Ok(())
 }
