@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use crate::{
     config::Config,
-    files::{DownloadStatus, File},
+    files::File,
 };
 
 #[derive(Debug, Clone, Serialize, Default)]

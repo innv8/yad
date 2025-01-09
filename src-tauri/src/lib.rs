@@ -6,7 +6,6 @@ use std::{
     process::Command,
     sync::{mpsc, Arc, Mutex},
     thread,
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 use tauri::{self, Emitter};
