@@ -28,8 +28,6 @@ file.
 This software is released under the [Apache V2 license](https://choosealicense.com/licenses/apache-2.0/). Please read both the [License](./LICENSE) and [Notice](./NOTICE)
 
 
-
-
 ## Installation
 
 This project is built with [Rust](https://www.rust-lang.org/) and [Tauri](https://tauri.app/), It also requires [Node](https://nodejs.org) to be installed. Therefore make sure they're installed firts.
@@ -54,25 +52,15 @@ Once done, double click on the binary to open. Below are sample screenshots.
 
 ---
 
-## Reporting issues
-
-This is still in beta version. Therefore, if you find any issues, please raise it in the [Issues](https://github.com/innv8/yad/issues) tab.
 
 ## Contributing
 
-Contribution is welcome. Be it documentation, improving the code, adding tests, anything to help. If
-you're interested, please follow the following steps:
+Please the following guidelines on contributing.
 
-1. Identify/ raise an issue 
-2. Fork the repository (from the main branch) and clone it.
-3. Checkout to your branch with the issue number as part of the branch name. In the example below,
-   it's related to issue #12
-    ```sh
-    git checkout -b fx/issue-12
-    ```
-4. Make your changes and push them to GitHub 
-5. Open a pull request to this repo.
-
+- [Reporting Bugs](./.github/ISSUE_TEMPLATE/bug_report.md)
+- [Requesting Features](./.github/ISSUE_TEMPLATE/feature_request.md)
+- [How to contribute](./.github/CONTRIBUTING.md)
+- [How to make a pull request](./.github/pull_request_template.md)
 
 ---
 
