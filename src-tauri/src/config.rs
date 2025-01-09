@@ -3,6 +3,7 @@ use sys_info;
 
 pub const APP_NAME: &str = "Yad";
 
+
 #[derive(Debug)]
 pub struct Config {
     pub os: String,
@@ -90,3 +91,5 @@ impl Default for Config {
         }
     }
 }
+
+

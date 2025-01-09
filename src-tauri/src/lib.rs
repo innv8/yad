@@ -16,6 +16,7 @@ pub mod files;
 pub mod storage;
 
 const CHUNK_SIZE: u64 = 1024 * 1024; // 1MB chunks
+const BROWSER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -132,7 +133,7 @@ fn download(window: tauri::Window, url: String) -> Result<(), String> {
 
     thread::spawn(move || {
         for downloaded in receiver {
-            if let Err(_) = progress_window.emit("download-progress", downloaded) {
+            if progress_window.emit("download-progress", downloaded).is_err() {
                 println!("failed to emit download progress");
             }
         }
@@ -150,6 +151,7 @@ fn download(window: tauri::Window, url: String) -> Result<(), String> {
             match client
                 .get(&url)
                 .header("Range", format!("bytes={start}-{end}"))
+                .header("User-Agent", BROWSER_AGENT)
                 .send()
                 .and_then(|res| res.bytes())
             {
@@ -159,7 +161,7 @@ fn download(window: tauri::Window, url: String) -> Result<(), String> {
                     d_file.write_all(&response).expect("write failed");
                     let mut progress = progress.lock().unwrap();
                     // *progress += response.len() as u64;
-                    *progress += (end - start) as u64;
+                    *progress += end - start;
 
                     let _ = sender.send(DownloadProgress {
                         download_id: record.id,
