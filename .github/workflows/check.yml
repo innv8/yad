@@ -1,0 +1,59 @@
+name: Check YaD
+
+on:
+  push:
+    branches:
+      - dev
+
+concurrency:
+  group: "tauriapp-build-${{ github.ref }}"
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 1
+  RUSTC_WRAPPER: sccache
+  CARGO_BUILD_JOBS: 2
+
+jobs:
+  check:
+    name: Check 
+    runs-on: ubuntu-latest 
+
+    steps:
+      - name: Checkout code.
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: npm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: cargo
+          target: x86_64-unknown-linux-gnu
+
+      - name: Install sccache
+        run: |
+          SCCACHE_VERSION=v0.7.7
+          curl -L "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz" | tar xz
+          sudo mv sccache-*/sccache /usr/local/bin/sccache
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+          shared-key: "build"
+          
+      - name: Install Dependencies
+        run: npm ci
+        
+      - name: Build Application
+        run: |
+          npm run tauri build -- \
+            --target x86_64-unknown-linux-gnu \
+            --bundles deb \
+            --ci
