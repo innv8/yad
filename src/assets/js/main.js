@@ -132,12 +132,10 @@ searchField.addEventListener("paste", async (event) => {
 });
 
 
-let downloadProgress = {};
 
 window.__TAURI__.event.listen("download-started", (event) => {
 	// add a download record to the table
 	const data = event.payload;
-	downloadProgress[data['downloadId']] = 0;
 
 
 	let row = document.createElement("tr");
@@ -184,14 +182,11 @@ window.__TAURI__.event.listen("download-started", (event) => {
 
 window.__TAURI__.event.listen("download-progress", (event) => {
 	const data = event.payload;
-	console.log(`download-progress:: ${JSON.stringify(data)}`);
+	logInfo(`download-progress:: ${JSON.stringify(data)}`);
 
-	let currentSize = downloadProgress[data['downloadId']];
-	currentSize += data['downloaded'];
-	let totalSize = data['totalSize'];
-	let percentage = (currentSize / totalSize) * 100;
-	percentage = percentage.toFixed(0);
-	downloadProgress[data['downloadId']] += data['downloaded'];
+	let percentage = (data['downloaded'] / data['totalSize']) * 100;
+	percentage = percentage.toFixed(2);
+
 	logInfo(`downloaded:: ${percentage}%`);
 
 	let progressCell = document.getElementById(`progress-${data['downloadId']}`);
@@ -212,6 +207,7 @@ window.__TAURI__.event.listen("download-progress", (event) => {
 	`;
 
 	if (percentage == 100) {
+		logInfo("download ended, fetch");
 		getRecords();
 	}
 
