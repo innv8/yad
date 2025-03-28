@@ -3,5 +3,6 @@
 
 
 fn main() {
+    // initiate YAD
     yad_lib::run()
 }
