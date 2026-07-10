@@ -53,7 +53,12 @@ impl Default for Config {
             }
         };
 
-        let home_dir = env::var("HOME").unwrap_or_else(|_| env::var("USERPROFILE").unwrap());
+        let home_dir = env::var("HOME")
+            .or_else(|_| env::var("USERPROFILE"))
+            .unwrap_or_else(|_| {
+                eprintln!("Warning: neither HOME nor USERPROFILE is set, using /tmp");
+                "/tmp".to_string()
+            });
         let _os: &str = &os;
 
         let _home_dir = Path::new(&home_dir);

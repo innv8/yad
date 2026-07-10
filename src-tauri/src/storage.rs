@@ -19,7 +19,7 @@ pub struct DownloadRecord {
     pub destination_path: String,
     pub file_size: u64,
     pub download_start_time: u64,
-    pub download_stop_time: u64,
+    pub download_stop_time: Option<u64>,
     pub download_status: String,
     pub downloaded_percentage: f32,
 }
@@ -36,7 +36,7 @@ impl From<File> for DownloadRecord {
             destination_path: f.destination_path,
             file_size: f.file_size,
             download_start_time: f.download_start_time,
-            download_stop_time: f.download_stop_time,
+            download_stop_time: if f.download_stop_time == 0 { None } else { Some(f.download_stop_time) },
             download_status: f.download_status.to_string(),
             downloaded_percentage: 0.0,
         }
@@ -56,7 +56,7 @@ pub struct Chunk {
 
 impl Chunk {
     pub fn new(record_id: i64, start: u64, end: u64) -> Self {
-        let status = "InProgress".to_string();
+        let status = "Pending".to_string();
         let id = 0;
         Chunk {
             id,
@@ -341,7 +341,7 @@ pub fn insert_record(
 pub fn update_download_record(
     id: i64,
     download_status: &str,
-    download_stop_time: u64,
+    download_stop_time: Option<u64>,
     file_size: u64,
     cfg: &Config,
 ) -> Result<(), Box<dyn Error>> {
@@ -450,7 +450,7 @@ pub fn count_chunks(record_id: i64, cfg: &Config) -> Result<(i32, i32, i32), Box
     for record in record_iter {
         let r = record?;
         println!("status={}, count: {}", r.status, r.count);
-        if r.status == "Pending" {
+        if r.status == "Pending" || r.status == "InProgress" || r.status == "Cancelled" {
             pending = r.count;
         } else if r.status == "Finished" {
             finished = r.count;
@@ -460,4 +460,23 @@ pub fn count_chunks(record_id: i64, cfg: &Config) -> Result<(i32, i32, i32), Box
     }
     println!("---- pending: {pending}, finished: {finished}, failed: {failed}");
     Ok((pending, finished, failed))
+}
+
+/// Fetches all chunks for a given download record. Used for resume/retry logic.
+pub fn get_chunks_by_record(record_id: i64, cfg: &Config) -> Result<Vec<Chunk>, Box<dyn Error>> {
+    let conn = get_db(cfg)?;
+    let sql = "SELECT id, record_id, start, end, status FROM chunk WHERE record_id = ?1";
+    let mut stmt = conn.prepare(sql)?;
+    let chunks = stmt
+        .query_map(params![record_id], |row| {
+            Ok(Chunk {
+                id: row.get(0)?,
+                record_id: row.get(1)?,
+                start: row.get(2)?,
+                end: row.get(3)?,
+                status: row.get(4)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(chunks)
 }
