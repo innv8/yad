@@ -33,7 +33,7 @@ impl Default for Config {
     /// system.
     ///
     /// # Example
-    /// ```rust
+    /// ```ignore
     /// let cfg = config::Config::default();
     /// ```
     fn default() -> Self {
@@ -115,6 +115,38 @@ impl Default for Config {
             tmp_dir,
             db_name,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_config_has_non_empty_fields() {
+        let cfg = Config::default();
+        assert!(!cfg.os.is_empty(), "OS should not be empty");
+        assert!(!cfg.download_dir.is_empty(), "download_dir should not be empty");
+        assert!(!cfg.config_dir.is_empty(), "config_dir should not be empty");
+        assert!(!cfg.tmp_dir.is_empty(), "tmp_dir should not be empty");
+        assert_eq!(cfg.db_name, "Yad.db");
+    }
+
+    #[test]
+    fn test_download_dir_ends_with_yad() {
+        let cfg = Config::default();
+        assert!(
+            cfg.download_dir.ends_with("Yad") || cfg.download_dir.ends_with("yad"),
+            "download_dir should end with Yad: {}",
+            cfg.download_dir
+        );
+    }
+
+    #[test]
+    fn test_tmp_dir_is_absolute() {
+        let cfg = Config::default();
+        let p = Path::new(&cfg.tmp_dir);
+        assert!(p.is_absolute(), "tmp_dir should be absolute: {}", cfg.tmp_dir);
     }
 }
 

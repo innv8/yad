@@ -91,7 +91,7 @@ struct ChunkCount {
 /// - `Err(dyn std::error::Error)`: An error if any error occurs.
 ///
 /// # Example
-/// ```rust 
+/// ```ignore
 /// let cfg = config::Config::default();
 /// let conn = match get_db(&cfg)?;
 /// ```
@@ -125,13 +125,13 @@ fn get_db(cfg: &Config) -> Result<Connection, Box<dyn Error>> {
 /// - `Err(Box<dyn std::error::Error)`: An error in case it occurs.
 ///
 /// # Example
-/// ```rust 
+/// ```ignore
 /// let cfg = config::Config::default();
 /// match create_tables(&cfg) {
 ///     Ok(()) => println!("tables created"),
 ///     Err(e) => panic!("failed to create tables because {e}")
 /// };
-/// ````
+/// ```
 pub fn create_tables(cfg: &Config) -> Result<(), Box<dyn Error>> {
     let conn = get_db(cfg)?;
 
@@ -181,7 +181,7 @@ pub fn create_tables(cfg: &Config) -> Result<(), Box<dyn Error>> {
 /// - `Err(Bix<dyn std::error::Error>)`: An error if it occurred.
 ///
 /// # Example
-/// ```rust 
+/// ```ignore
 /// let cfg = config::Config::default();
 /// let download_records = match storage::read_download_records(&cfg) {
 ///     Ok(records) => records,
@@ -264,7 +264,7 @@ pub fn read_download_records(cfg: &Config) -> Result<Vec<DownloadRecord>, Box<dy
 /// exist in the database.
 ///
 /// # Example
-/// ```rust 
+/// ```ignore
 /// let cfg = config::Config::default();
 /// let file_url = "https://example.com/super-secret-file.pdf";
 ///
@@ -460,6 +460,253 @@ pub fn count_chunks(record_id: i64, cfg: &Config) -> Result<(i32, i32, i32), Box
     }
     println!("---- pending: {pending}, finished: {finished}, failed: {failed}");
     Ok((pending, finished, failed))
+}
+
+#[cfg(test)]
+fn test_config(tmp_name: &str) -> Config {
+    let tmp = std::env::temp_dir().join("yad_test").join(tmp_name);
+    let _ = fs::remove_dir_all(&tmp);
+    fs::create_dir_all(&tmp).unwrap();
+    Config {
+        config_dir: tmp.to_str().unwrap().to_string(),
+        download_dir: tmp.join("Downloads").to_str().unwrap().to_string(),
+        tmp_dir: tmp.join("tmp").to_str().unwrap().to_string(),
+        os: "Linux".to_string(),
+        user: "test".to_string(),
+        db_name: "yad.db".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_tables_creates_db() {
+        let cfg = test_config("create_tables");
+        assert!(create_tables(&cfg).is_ok());
+        // DB file should exist
+        let db_path = Path::new(&cfg.config_dir).join("yad.db");
+        assert!(db_path.exists());
+    }
+
+    #[test]
+    fn test_create_tables_idempotent() {
+        let cfg = test_config("create_tables_idempotent");
+        assert!(create_tables(&cfg).is_ok());
+        assert!(create_tables(&cfg).is_ok()); // second call should not fail
+    }
+
+    #[test]
+    fn test_insert_and_search_by_url() {
+        let cfg = test_config("insert_search");
+        create_tables(&cfg).unwrap();
+
+        let record = DownloadRecord {
+            id: 0,
+            file_url: "https://example.com/file.zip".into(),
+            file_name: "file.zip".into(),
+            file_type: "Compressed".into(),
+            extension: "zip".into(),
+            destination_dir: "/tmp/yad_test/Compressed".into(),
+            destination_path: "/tmp/yad_test/Compressed/file.zip".into(),
+            file_size: 1024,
+            download_start_time: 1000,
+            download_stop_time: None,
+            download_status: "Pending".into(),
+            downloaded_percentage: 0.0,
+        };
+
+        let id = insert_record(&record, 1024, &cfg).unwrap();
+        assert!(id > 0, "insert should return a positive id");
+
+        let found = search_by_url("https://example.com/file.zip", &cfg).unwrap();
+        assert_eq!(found.id, id);
+        assert_eq!(found.file_name, "file.zip");
+        assert_eq!(found.file_size, 1024);
+        assert_eq!(found.download_status, "Pending");
+        assert!(found.download_stop_time.is_none());
+    }
+
+    #[test]
+    fn test_insert_duplicate_url_fails() {
+        let cfg = test_config("insert_duplicate");
+        create_tables(&cfg).unwrap();
+
+        let record = DownloadRecord {
+            id: 0,
+            file_url: "https://example.com/dup.zip".into(),
+            file_name: "dup.zip".into(),
+            file_type: "Compressed".into(),
+            extension: "zip".into(),
+            destination_dir: "/tmp".into(),
+            destination_path: "/tmp/dup.zip".into(),
+            file_size: 512,
+            download_start_time: 1000,
+            download_stop_time: None,
+            download_status: "Pending".into(),
+            downloaded_percentage: 0.0,
+        };
+
+        insert_record(&record, 512, &cfg).unwrap();
+        let dup = insert_record(&record, 512, &cfg);
+        assert!(dup.is_err(), "duplicate URL should be rejected");
+    }
+
+    #[test]
+    fn test_update_download_record() {
+        let cfg = test_config("update_record");
+        create_tables(&cfg).unwrap();
+
+        let record = DownloadRecord {
+            id: 0,
+            file_url: "https://example.com/file.zip".into(),
+            file_name: "file.zip".into(),
+            file_type: "Compressed".into(),
+            extension: "zip".into(),
+            destination_dir: "/tmp".into(),
+            destination_path: "/tmp/file.zip".into(),
+            file_size: 1024,
+            download_start_time: 1000,
+            download_stop_time: None,
+            download_status: "Pending".into(),
+            downloaded_percentage: 0.0,
+        };
+
+        let id = insert_record(&record, 1024, &cfg).unwrap();
+
+        update_download_record(id, "Finished", Some(2000), 1024, &cfg).unwrap();
+
+        let found = search_by_url("https://example.com/file.zip", &cfg).unwrap();
+        assert_eq!(found.download_status, "Finished");
+        assert_eq!(found.download_stop_time, Some(2000));
+    }
+
+    #[test]
+    fn test_chunk_lifecycle() {
+        let cfg = test_config("chunk_lifecycle");
+        create_tables(&cfg).unwrap();
+
+        // Insert parent record
+        let record = DownloadRecord {
+            id: 0,
+            file_url: "https://example.com/big.zip".into(),
+            file_name: "big.zip".into(),
+            file_type: "Compressed".into(),
+            extension: "zip".into(),
+            destination_dir: "/tmp".into(),
+            destination_path: "/tmp/big.zip".into(),
+            file_size: 5_000_000,
+            download_start_time: 1000,
+            download_stop_time: None,
+            download_status: "Pending".into(),
+            downloaded_percentage: 0.0,
+        };
+        let record_id = insert_record(&record, 5_000_000, &cfg).unwrap();
+
+        // Save chunks
+        let chunk1 = Chunk::new(record_id, 0, 1023);
+        let chunk2 = Chunk::new(record_id, 1024, 2047);
+        let id1 = save_chunk(&chunk1, &cfg).unwrap();
+        let id2 = save_chunk(&chunk2, &cfg).unwrap();
+        assert!(id1 > 0);
+        assert!(id2 > 0);
+
+        // Count (both Pending)
+        let (pending, finished, failed) = count_chunks(record_id, &cfg).unwrap();
+        assert_eq!(pending, 2, "both chunks should be Pending");
+        assert_eq!(finished, 0);
+        assert_eq!(failed, 0);
+
+        // Update chunk1 to Finished
+        update_chunk(record_id, 0, "Finished", &cfg).unwrap();
+        let (pending, finished, failed) = count_chunks(record_id, &cfg).unwrap();
+        assert_eq!(pending, 1);
+        assert_eq!(finished, 1);
+        assert_eq!(failed, 0);
+
+        // Update chunk2 to Failed
+        update_chunk(record_id, 1024, "Failed", &cfg).unwrap();
+        let (pending, finished, failed) = count_chunks(record_id, &cfg).unwrap();
+        assert_eq!(pending, 0);
+        assert_eq!(finished, 1);
+        assert_eq!(failed, 1);
+    }
+
+    #[test]
+    fn test_get_chunks_by_record() {
+        let cfg = test_config("get_chunks");
+        create_tables(&cfg).unwrap();
+
+        let record = DownloadRecord {
+            id: 0,
+            file_url: "https://example.com/data.zip".into(),
+            file_name: "data.zip".into(),
+            file_type: "Compressed".into(),
+            extension: "zip".into(),
+            destination_dir: "/tmp".into(),
+            destination_path: "/tmp/data.zip".into(),
+            file_size: 3_000_000,
+            download_start_time: 1000,
+            download_stop_time: None,
+            download_status: "Pending".into(),
+            downloaded_percentage: 0.0,
+        };
+        let rid = insert_record(&record, 3_000_000, &cfg).unwrap();
+
+        let c1 = Chunk::new(rid, 0, 999);
+        let c2 = Chunk::new(rid, 1000, 1999);
+        save_chunk(&c1, &cfg).unwrap();
+        save_chunk(&c2, &cfg).unwrap();
+
+        let chunks = get_chunks_by_record(rid, &cfg).unwrap();
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].record_id, rid);
+        assert_eq!(chunks[1].record_id, rid);
+    }
+
+    #[test]
+    fn test_delete_record_cascades_to_chunks() {
+        let cfg = test_config("delete_cascade");
+        create_tables(&cfg).unwrap();
+
+        let record = DownloadRecord {
+            id: 0,
+            file_url: "https://example.com/delete.zip".into(),
+            file_name: "delete.zip".into(),
+            file_type: "Compressed".into(),
+            extension: "zip".into(),
+            destination_dir: "/tmp".into(),
+            destination_path: "/tmp/delete.zip".into(),
+            file_size: 1000,
+            download_start_time: 1000,
+            download_stop_time: None,
+            download_status: "Pending".into(),
+            downloaded_percentage: 0.0,
+        };
+        let rid = insert_record(&record, 1000, &cfg).unwrap();
+
+        let c = Chunk::new(rid, 0, 999);
+        save_chunk(&c, &cfg).unwrap();
+
+        delete_record(rid, &cfg).unwrap();
+
+        // After delete, search should fail
+        let found = search_by_url("https://example.com/delete.zip", &cfg);
+        assert!(found.is_err(), "record should be deleted");
+
+        // Chunks should also be gone
+        let chunks = get_chunks_by_record(rid, &cfg).unwrap();
+        assert!(chunks.is_empty(), "chunks should cascade on delete");
+    }
+
+    #[test]
+    fn test_read_download_records_empty() {
+        let cfg = test_config("read_empty");
+        create_tables(&cfg).unwrap();
+        let records = read_download_records(&cfg).unwrap();
+        assert!(records.is_empty(), "fresh DB should have no records");
+    }
 }
 
 /// Fetches all chunks for a given download record. Used for resume/retry logic.
