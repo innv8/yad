@@ -1,9 +1,6 @@
-//! This module deals with the file itself and its information.
-
 use std::{path::Path, time::{SystemTime, UNIX_EPOCH}};
 use crate::{config, storage::DownloadRecord};
 
-/// Enums representing the possible download statuses.
 #[derive(Debug, Clone)]
 pub enum DownloadStatus {
     Pending,
@@ -14,13 +11,6 @@ pub enum DownloadStatus {
 }
 
 impl DownloadStatus {
-    /// Converts a `DownloadStatus` enum into a string for storing in the database.
-    ///
-    /// # Example
-    /// ```rust 
-    /// let status = files::DownloadStatus::Pending;
-    /// let status_str: String = status::to_string();
-    /// ```
     pub fn to_string(&self) -> String {
         match self {
             DownloadStatus::Pending => String::from("Pending"),
@@ -31,14 +21,6 @@ impl DownloadStatus {
         }
     }
 
-    /// Converts a string into an instance of `DownloadStatus` enum. This is mainly used when the
-    /// data is read from the database.
-    ///
-    /// # Example
-    /// ```rust 
-    /// let status_str: &str = "Pending";
-    /// let status = files::DownloadStatus::from_string(status);
-    /// ```
     pub fn from_string(status: &str) -> Self {
         match status {
             "Pending" => DownloadStatus::Pending,
@@ -51,8 +33,6 @@ impl DownloadStatus {
     }
 }
 
-/// This defines the supported file types. This is to help in organising the files in the download
-/// directory.
 #[derive(Debug, Clone)]
 pub enum FileType {
     Compressed,
@@ -65,19 +45,11 @@ pub enum FileType {
 }
 
 impl FileType {
-    /// Converts an instance `FileType` into a string. Usually for storing in the database or
-    /// making the directory path for downloading the file.
-    ///
-    /// # Example
-    /// ```rust 
-    /// let file_type = files::FileType::Compressed;
-    /// let file_type_str: String = file_type::to_string();
-    /// ```
     pub fn to_string(&self) -> String {
         match self {
             FileType::Compressed => String::from("Compressed"),
             FileType::Videos => String::from("Videos"),
-            FileType::Audio => String::from("Audio"), 
+            FileType::Audio => String::from("Audio"),
             FileType::Documents => String::from("Documents"),
             FileType::Programs => String::from("Programs"),
             FileType::Images => String::from("Images"),
@@ -85,13 +57,6 @@ impl FileType {
         }
     }
 
-    /// Converts a string into an instance of `FileType` usually from the database.
-    ///
-    /// # Example
-    /// ```rust 
-    /// let file_type_str: &str = "Compressed";
-    /// let file_type = files::FileType::from_string(file_type_str);
-    /// ```
     pub fn from_string(file_type: &str) -> Self {
         match file_type {
             "Compressed" => FileType::Compressed,
@@ -104,15 +69,8 @@ impl FileType {
         }
     }
 }
+
 impl From<DownloadRecord> for File {
-    /// Implementing a `From` trait to convert an instance of `DownloadRecord` to an instance of
-    /// `File`
-    ///
-    /// # Example
-    /// ```rust 
-    /// let download_record = storage::DownloadRecord::default();
-    /// let file = files::File::from(download_record);
-    /// ```
     fn from(dr: DownloadRecord) -> Self {
         let stop = dr.download_stop_time.unwrap_or(0);
         File {
@@ -128,11 +86,10 @@ impl From<DownloadRecord> for File {
             download_stop_time: stop,
             download_duration: if stop > 0 { stop - dr.download_start_time } else { 0 },
             download_status: DownloadStatus::from_string(&dr.download_status),
-        } 
+        }
     }
 }
 
-/// The struct representing details about a file.
 #[derive(Debug, Clone)]
 pub struct File {
     pub id: i64,
@@ -146,83 +103,34 @@ pub struct File {
     pub download_start_time: u64,
     pub download_stop_time: u64,
     pub download_duration: u64,
-    pub download_status: DownloadStatus
+    pub download_status: DownloadStatus,
 }
 
-
-/// This function gets the type of a file based on its extension.
-/// For example, a .csv is a Document whereas a .mp4 is a Videos
-/// 
-/// # Arguments
-/// - `extension`: The file extension.
-///
-/// # Returns
-/// This function returns an instance of `FileType` corresponding to the correct file type based on
-/// the file extension.
-///
-/// # Example 
-/// ```rust 
-/// let file_type = get_file_type("csv");
-/// ```
 fn get_file_type(extension: &str) -> FileType {
     match extension {
-         "mp4" | "mkv" | "avi" | "mov" | "flv" | "webm" | "wmv" | "mpeg" | "mpg" | "3gp" => FileType::Videos,
+        "mp4" | "mkv" | "avi" | "mov" | "flv" | "webm" | "wmv" | "mpeg" | "mpg" | "3gp" => FileType::Videos,
         "zip" | "rar" | "7z" | "tar" | "gz" | "targz" | "tarbz2" | "tarxz" | "iso" | "xz" => FileType::Compressed,
         "mp3" | "flac" | "wav" | "aac" | "ogg" | "m4a" | "wma" | "alac" | "opus" | "amr" => FileType::Audio,
         "pdf" | "docx" | "doc" | "txt" | "xlsx" | "pptx" | "ppt" | "odt" | "html" | "epub" | "csv" | "xml" => FileType::Documents,
-        "exe" | "msi" | "bat" | "apk" | "dmg"  | "bin" | "deb" | "rpm"  => FileType::Programs,
+        "exe" | "msi" | "bat" | "apk" | "dmg" | "bin" | "deb" | "rpm" => FileType::Programs,
         "jpg" | "jpeg" | "png" | "gif" | "bmp" | "tiff" | "webp" | "svg" | "ico" => FileType::Images,
         _ => FileType::Others,
     }
 }
 
-/// This function gets the destination of the file to be downloaded. It combines:
-/// - the download directory
-/// - the file type
-/// - the file name.
-/// This way, it organises similar files into the same directory e.g ~/Downloads/Yad/Documents.
-///
-/// # Arguments
-/// - `file_name`: The name of the file being downloaded.
-/// - `config`: The application configs.
-/// - `file_type`: The file type.
-///
-/// # Returns
-/// This function returns two strings
-/// - `dir`: The directory where the file will be saved into.
-/// - `path`: The full path of where the file will be saved to.
-///
-/// # Example
-/// ```rust
-///  let cfg = configs::Config::default();
-///  let file = "some_file.csv";
-///  // get the extension of the file.
-///  let extension = get_extension(&file);
-///  let file_type = get_file_type(extension);
-///  let (dir, path) - get_destination_path(file, &cfg, file_type);
-/// ```
-fn get_destination_path(file_name: &str,cfg: &config::Config, file_type: &FileType) -> (String, String) {
+fn get_destination_path(file_name: &str, cfg: &config::Config, file_type: &FileType) -> (String, String) {
     let download_dir = Path::new(&cfg.download_dir);
     let dir = download_dir.join(format!("{:?}", file_type));
     let path = dir.join(file_name);
-
     let dir = dir.to_str().unwrap_or("_").to_string();
     let path = path.to_str().unwrap_or("_").to_string();
-
-
     (dir, path)
 }
 
 impl File {
-    /// This constructs a new file from the file url. It is responsible for calling functions that
-    /// get the file type and destination path.
-    pub fn new(file_url: &str, cfg : &config::Config ) -> Self {
-        let file_name = file_url.split('/')
-            .last()
-            .unwrap_or("");
-
-        let extension =  file_name.split('.').last().unwrap_or("_").to_string();
-
+    pub fn new(file_url: &str, cfg: &config::Config) -> Self {
+        let file_name = file_url.split('/').last().unwrap_or("");
+        let extension = file_name.split('.').last().unwrap_or("_").to_string();
         let file_type = get_file_type(&extension);
         let (destination_dir, destination_path) = get_destination_path(file_name, cfg, &file_type);
         let now = SystemTime::now();
@@ -238,13 +146,181 @@ impl File {
             destination_dir,
             destination_path,
             file_size: 0,
-            download_start_time:now,
+            download_start_time: now,
             download_stop_time: 0,
             download_duration: 0,
             download_status: DownloadStatus::Pending,
         }
     }
-    
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
 
+    fn test_cfg() -> Config {
+        Config::default()
+    }
+
+    #[test]
+    fn test_download_status_round_trip() {
+        let variants = [
+            DownloadStatus::Pending,
+            DownloadStatus::InProgress,
+            DownloadStatus::Failed,
+            DownloadStatus::Finished,
+            DownloadStatus::Cancelled,
+        ];
+        for v in &variants {
+            let s = v.to_string();
+            let back = DownloadStatus::from_string(&s);
+            assert_eq!(v.to_string(), back.to_string(), "round-trip failed for {s}");
+        }
+    }
+
+    #[test]
+    fn test_download_status_unknown_defaults_to_pending() {
+        let s = DownloadStatus::from_string("UnknownStatus");
+        assert!(matches!(s, DownloadStatus::Pending));
+    }
+
+    #[test]
+    fn test_file_type_round_trip() {
+        let variants = [
+            FileType::Compressed,
+            FileType::Videos,
+            FileType::Audio,
+            FileType::Documents,
+            FileType::Programs,
+            FileType::Images,
+            FileType::Others,
+        ];
+        for v in &variants {
+            let s = v.to_string();
+            let back = FileType::from_string(&s);
+            assert_eq!(v.to_string(), back.to_string(), "round-trip failed for {s}");
+        }
+    }
+
+    #[test]
+    fn test_file_type_unknown_defaults_to_others() {
+        let t = FileType::from_string("UnknownType");
+        assert!(matches!(t, FileType::Others));
+    }
+
+    #[test]
+    fn test_get_file_type_videos() {
+        for ext in &["mp4", "mkv", "avi", "mov", "webm"] {
+            assert!(matches!(get_file_type(ext), FileType::Videos), "{ext} should be Videos");
+        }
+    }
+
+    #[test]
+    fn test_get_file_type_compressed() {
+        for ext in &["zip", "rar", "7z", "tar", "gz", "iso"] {
+            assert!(matches!(get_file_type(ext), FileType::Compressed), "{ext} should be Compressed");
+        }
+    }
+
+    #[test]
+    fn test_get_file_type_audio() {
+        for ext in &["mp3", "flac", "wav", "aac", "ogg"] {
+            assert!(matches!(get_file_type(ext), FileType::Audio), "{ext} should be Audio");
+        }
+    }
+
+    #[test]
+    fn test_get_file_type_documents() {
+        for ext in &["pdf", "docx", "txt", "csv", "html", "epub"] {
+            assert!(matches!(get_file_type(ext), FileType::Documents), "{ext} should be Documents");
+        }
+    }
+
+    #[test]
+    fn test_get_file_type_programs() {
+        for ext in &["exe", "dmg", "apk", "deb", "rpm"] {
+            assert!(matches!(get_file_type(ext), FileType::Programs), "{ext} should be Programs");
+        }
+    }
+
+    #[test]
+    fn test_get_file_type_images() {
+        for ext in &["jpg", "png", "gif", "svg", "webp"] {
+            assert!(matches!(get_file_type(ext), FileType::Images), "{ext} should be Images");
+        }
+    }
+
+    #[test]
+    fn test_get_file_type_unknown() {
+        assert!(matches!(get_file_type("xyz"), FileType::Others));
+    }
+
+    #[test]
+    fn test_file_new_extracts_name() {
+        let f = File::new("https://example.com/file.zip", &test_cfg());
+        assert_eq!(f.file_name, "file.zip");
+        assert_eq!(f.extension, "zip");
+        assert!(matches!(f.file_type, FileType::Compressed));
+        assert_eq!(f.file_url, "https://example.com/file.zip");
+        assert_eq!(f.download_status.to_string(), "Pending");
+        assert_eq!(f.id, 0);
+    }
+
+    #[test]
+    fn test_file_new_video_url() {
+        let f = File::new("https://example.com/movie.mp4", &test_cfg());
+        assert_eq!(f.file_name, "movie.mp4");
+        assert!(matches!(f.file_type, FileType::Videos));
+    }
+
+    #[test]
+    fn test_file_new_url_without_extension() {
+        let f = File::new("https://example.com/download", &test_cfg());
+        assert_eq!(f.file_name, "download");
+        assert_eq!(f.extension, "download");
+    }
+
+    #[test]
+    fn test_file_new_url_with_query_params() {
+        let f = File::new("https://example.com/file.pdf?token=abc", &test_cfg());
+        assert_eq!(f.file_name, "file.pdf?token=abc");
+    }
+
+    #[test]
+    fn test_file_new_stop_time_and_duration_are_zero() {
+        let f = File::new("https://example.com/file.zip", &test_cfg());
+        assert_eq!(f.download_stop_time, 0);
+        assert_eq!(f.download_duration, 0);
+    }
+
+    #[test]
+    fn test_file_new_start_time_is_recent() {
+        let f = File::new("https://example.com/file.zip", &test_cfg());
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        assert!(f.download_start_time > 0);
+        assert!(f.download_start_time <= now);
+        assert!(f.download_start_time > now - 10);
+    }
+
+    #[test]
+    fn test_destination_path_includes_file_type_dir() {
+        let cfg = test_cfg();
+        let (dir, path) = get_destination_path("doc.pdf", &cfg, &FileType::Documents);
+        assert!(dir.contains("Documents"), "dir should contain Documents: {dir}");
+        assert!(path.ends_with("doc.pdf"), "path should end with filename: {path}");
+    }
+
+    #[test]
+    fn test_destination_path_for_different_types() {
+        let cfg = test_cfg();
+        let (dir_vid, _) = get_destination_path("v.mp4", &cfg, &FileType::Videos);
+        let (dir_aud, _) = get_destination_path("a.mp3", &cfg, &FileType::Audio);
+        assert_ne!(dir_vid, dir_aud);
+        assert!(dir_vid.contains("Videos"));
+        assert!(dir_aud.contains("Audio"));
+    }
+}

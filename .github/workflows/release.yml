@@ -1,0 +1,143 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      should_release: ${{ steps.bump.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump version from conventional commits
+        id: bump
+        run: |
+          set -euo pipefail
+
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Last tag: $LAST_TAG"
+
+          if git describe --exact-match HEAD 2>/dev/null; then
+            echo "HEAD already tagged — nothing new to release"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Determine bump type from commit messages since last tag
+          BUMP="skip"
+          while IFS= read -r line; do
+            line="${line## }"
+            [ -z "$line" ] && continue
+            case "$line" in
+              *"BREAKING CHANGE"*) BUMP="major" ;;
+              *\!:*) [ "$BUMP" != "major" ] && BUMP="major" ;;
+              feat*) [ "$BUMP" != "major" ] && BUMP="minor" ;;
+              fix*) [ "$BUMP" = "skip" ] && BUMP="patch" ;;
+            esac
+          done < <(git log "${LAST_TAG}..HEAD" --format="%B" --no-merges)
+
+          if [ "$BUMP" = "skip" ]; then
+            echo "No feat/fix/breaking commits found — skipping release"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Bump type: $BUMP"
+
+          # Parse and bump semver
+          CURRENT=$(jq -r '.version' src-tauri/tauri.conf.json)
+          BASE="${CURRENT%%-*}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE"
+
+          case "$BUMP" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+          esac
+
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          echo "New version: $NEW_VERSION"
+
+          # Update version in config files
+          jq ".version = \"$NEW_VERSION\"" src-tauri/tauri.conf.json > /tmp/tc.json
+          mv /tmp/tc.json src-tauri/tauri.conf.json
+
+          sed -i 's/^version = ".*"/version = "'"$NEW_VERSION"'"/' src-tauri/Cargo.toml
+
+          # Commit, tag, push
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src-tauri/tauri.conf.json src-tauri/Cargo.toml
+          git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+          git tag "v$NEW_VERSION"
+          git push
+          git push origin "v$NEW_VERSION"
+
+          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    if: needs.version.outputs.should_release == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            bundle: dmg
+          - os: windows-latest
+            bundle: nsis
+          - os: ubuntu-latest
+            bundle: deb,appimage
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout release tag
+        run: |
+          git fetch --tags origin
+          git checkout "v${{ needs.version.outputs.version }}"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install system deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libsoup-3.0-dev
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2"
+
+      - name: Build bundles
+        run: cargo tauri build --bundles "${{ matrix.bundle }}"
+        working-directory: src-tauri
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          files: src-tauri/target/release/bundle/**/*
