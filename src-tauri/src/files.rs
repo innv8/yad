@@ -114,6 +114,7 @@ impl From<DownloadRecord> for File {
     /// let file = files::File::from(download_record);
     /// ```
     fn from(dr: DownloadRecord) -> Self {
+        let stop = dr.download_stop_time.unwrap_or(0);
         File {
             id: dr.id,
             file_url: dr.file_url,
@@ -124,8 +125,8 @@ impl From<DownloadRecord> for File {
             destination_path: dr.destination_path,
             file_size: dr.file_size,
             download_start_time: dr.download_start_time,
-            download_stop_time: dr.download_stop_time,
-            download_duration: dr.download_stop_time - dr.download_start_time,
+            download_stop_time: stop,
+            download_duration: if stop > 0 { stop - dr.download_start_time } else { 0 },
             download_status: DownloadStatus::from_string(&dr.download_status),
         } 
     }
