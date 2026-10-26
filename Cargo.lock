@@ -5831,7 +5831,7 @@ checksum = "ea6fc2961e4ef194dcbfe56bb845534d0dc8098940c7e5c012a258bfec6701bd"
 
 [[package]]
 name = "yad"
-version = "1.0.2"
+version = "2.0.0"
 dependencies = [
  "log",
  "serde_json",
@@ -5848,7 +5848,7 @@ dependencies = [
 
 [[package]]
 name = "yad-core"
-version = "1.0.2"
+version = "2.0.0"
 dependencies = [
  "aes",
  "cbc",
@@ -5871,7 +5871,7 @@ dependencies = [
 
 [[package]]
 name = "yadd"
-version = "1.0.2"
+version = "2.0.0"
 dependencies = [
  "env_logger",
  "log",
