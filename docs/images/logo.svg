@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- The title-bar mark from the app (src/assets/js/icons.js "down"), on the macOS icon grid. -->
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="#2b2e33"/>
+  <g transform="translate(512 512) scale(25) translate(-12 -12)" fill="none" stroke="#edeeec" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 4v12m0 0-5-5m5 5 5-5M5 20h14"/>
+  </g>
+</svg>
