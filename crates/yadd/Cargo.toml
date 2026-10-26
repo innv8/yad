@@ -1,6 +1,6 @@
 [package]
 name = "yadd"
-version = "1.0.2"
+version = "2.0.0"
 description = "YAD background download service"
 edition = "2021"
 license = "Apache-2.0"

@@ -1,6 +1,6 @@
 [package]
 name = "yad-core"
-version = "1.0.2"
+version = "2.0.0"
 description = "Download engine, storage and IPC for YAD"
 edition = "2021"
 license = "Apache-2.0"
