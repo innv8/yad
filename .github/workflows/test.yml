@@ -17,10 +17,15 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
 
       # Lets the end-to-end tests download real HLS/DASH video and join the tracks.
       - name: Install ffmpeg
         run: brew install ffmpeg
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
 
       # Engine, storage, parsers and end-to-end downloads against a local test server.
       - run: cargo test -p yad-core -p yadd
@@ -41,6 +46,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install chromium webkit
       - run: npm run test:ui
       - name: Keep screenshots when the layout test fails

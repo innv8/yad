@@ -54,9 +54,11 @@ jobs:
         with:
           targets: ${{ inputs.target }}
 
+      # Keeps compiled dependencies between runs, also when a build fails half way.
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ inputs.target }}
+          cache-on-failure: true
 
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
@@ -71,13 +73,11 @@ jobs:
             libsoup-3.0-dev \
             patchelf
 
-      - name: Install Tauri CLI
-        shell: bash
-        run: cargo tauri --version 2>/dev/null || cargo install tauri-cli --version "^2" --locked
-
+      # The prebuilt CLI from npm takes seconds; `cargo install tauri-cli` compiles for ~10 min.
       - name: Build app
         working-directory: src-tauri
-        run: cargo tauri build --target ${{ inputs.target }} --bundles ${{ inputs.bundles }}
+        shell: bash
+        run: npx --yes @tauri-apps/cli@2 build --target ${{ inputs.target }} --bundles ${{ inputs.bundles }}
 
       - name: Build background service (yadd)
         run: cargo build --release -p yadd --target ${{ inputs.target }}
