@@ -183,6 +183,9 @@ window.__TAURI__ = {
     listen: async (name, cb) => {
       if (!listeners.has(name)) listeners.set(name, new Set());
       listeners.get(name).add(cb);
+      // The real tray page listens long before the first click; here the page may still be
+      // loading, so hand a late listener the anchor it would already have received.
+      if (name === 'tray-anchor' && q.get('anchor')) setTimeout(() => cb({ event: name, id: 0, payload: { edge: q.get('anchor') } }), 0);
       return () => listeners.get(name).delete(cb);
     },
     emit: async (name, payload) => emitTauri(name, payload),
@@ -196,7 +199,6 @@ window.__TAURI__ = {
 };
 window.__YAD_MOCK__ = { db, emit, settings: () => settings };
 
-if (q.get('anchor')) setTimeout(() => emitTauri('tray-anchor', { edge: q.get('anchor') }), 20);
 if (OFFLINE) setTimeout(() => emitTauri('yad-connection', { connected: false }), 50);
 
 if (!STATIC) {

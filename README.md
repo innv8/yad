@@ -206,9 +206,9 @@ real HLS and DASH video and check the result with `ffprobe`.
 
 | Workflow | When it runs | What it does |
 |---|---|---|
-| `test.yml` | Every pull request to `main` | Rust tests and the interface layout test on macOS, Linux and Windows |
-| `release.yml` | Every push to `main` | Bumps the version from conventional commits (`feat:`, `fix:`), tags it, builds the **macOS Apple Silicon** app and `yadd`, and attaches them and the extension to the GitHub release. Pushes without a `feat` or `fix` commit still build; the files are kept as workflow artifacts. |
-| `build-platforms.yml` | By hand: **Actions → Build other platforms → Run workflow** | Builds Windows, Linux and Intel macOS (all or one). Give it a release tag such as `v1.1.0` to attach the files to that release. |
+| `test.yml` | Every pull request to `main` | On macOS: Rust tests (including real HLS/DASH video via ffmpeg) and the interface layout test. Also checks the extension's scripts and that the app and extension versions match. |
+| `release.yml` | Every push to `main` | Bumps the version from conventional commits (`feat:`, `fix:`), tags it, builds the **macOS Apple Silicon** app, `yadd` and the **YAD Link extension** (always the same version), and attaches them to the GitHub release. Pushes without a `feat` or `fix` commit still build; the files are kept as workflow artifacts. |
+| `build-platforms.yml` | Only by hand: **Actions → Build other platforms → Run workflow** | Builds Windows, Linux and Intel macOS (all or one). Give it a release tag such as `v1.1.0` to attach the files to that release. These platforms aren't tested in CI yet. |
 
 The release builds aren't code-signed. Signing needs an Apple Developer ID and a Windows
 code-signing certificate added as repository secrets.

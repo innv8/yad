@@ -89,7 +89,7 @@ installs, next to the development ID. Without that, Chrome refuses the connectio
 | when | method | params |
 |---|---|---|
 | "Start YAD" (popup, options) | `start` | – (the host starts YAD; then `hello` + `getSettings`) |
-| port opened | `hello` | `{ browser: "Chrome 142", version: "1.0.0" }` |
+| port opened | `hello` | `{ browser: "Chrome 142", version: "1.0.2" }` |
 | after `hello`, popup/options opened | `getSettings` | – |
 | an option changed | `setSettings` | `{ browser: { <changed keys> } }` |
 | HLS/DASH manifest seen, popup file sizes | `probe` | `{ url, headers }` |

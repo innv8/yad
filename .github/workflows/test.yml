@@ -1,43 +1,26 @@
 name: Test
 
+# Only macOS (Apple Silicon) and the browser extension are tested for now.
+# Windows and Linux builds can still be made by hand with build-platforms.yml.
+
 on:
   pull_request:
     branches: [main]
 
 jobs:
   rust:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install system dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libjavascriptcoregtk-4.1-dev \
-            libsoup-3.0-dev \
-            mold \
-            ffmpeg
-
-      - name: Use mold linker (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          echo 'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=clang' >> "$GITHUB_ENV"
-          echo 'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS=-C link-arg=-fuse-ld=mold -C debuginfo=0' >> "$GITHUB_ENV"
+      # Lets the end-to-end tests download real HLS/DASH video and join the tracks.
+      - name: Install ffmpeg
+        run: brew install ffmpeg
 
       # Engine, storage, parsers and end-to-end downloads against a local test server.
       - run: cargo test -p yad-core -p yadd
@@ -48,30 +31,44 @@ jobs:
       - run: cargo build -p yad
 
   ui:
-    # The same screens rendered by Chromium (WebView2) and WebKit (WKWebView/WebKitGTK)
-    # must lay out identically on every OS.
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    # The same screens rendered by Chromium and WebKit (the engine behind the macOS app)
+    # must lay out identically.
+    runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium webkit
+      - run: npx playwright install chromium webkit
       - run: npm run test:ui
+      - name: Keep screenshots when the layout test fails
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: ui-test-output
+          path: tests/ui/.output
 
   extension:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
+
+      - name: App, service and extension versions match
+        run: |
+          APP=$(jq -r .version src-tauri/tauri.conf.json)
+          for v in "$(jq -r .version extension/manifest.json)" \
+                   "$(grep -m1 '^version' src-tauri/Cargo.toml | cut -d'"' -f2)" \
+                   "$(grep -m1 '^version' crates/yad-core/Cargo.toml | cut -d'"' -f2)" \
+                   "$(grep -m1 '^version' crates/yadd/Cargo.toml | cut -d'"' -f2)"; do
+            if [ "$v" != "$APP" ]; then echo "::error::Version mismatch: app is $APP, found $v"; exit 1; fi
+          done
+          echo "All at $APP"
+
       - name: Syntax-check extension scripts
         run: |
           node -e "JSON.parse(require('fs').readFileSync('extension/manifest.json','utf8'))"

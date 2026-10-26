@@ -14,7 +14,7 @@ jobs:
       version: ${{ steps.bump.outputs.version }}
       should_release: ${{ steps.bump.outputs.should_release }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_PAT }}
@@ -90,7 +90,8 @@ jobs:
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
           echo "should_release=true" >> "$GITHUB_OUTPUT"
 
-  # Apple Silicon is built on every push to main. Other platforms: build-platforms.yml.
+  # Apple Silicon is built on every push to main, together with the browser extension
+  # (same version). Other platforms: build-platforms.yml.
   macos-arm64:
     needs: version
     uses: ./.github/workflows/build.yml
@@ -101,20 +102,5 @@ jobs:
       label: macos-arm64
       ref: ${{ needs.version.outputs.should_release == 'true' && format('v{0}', needs.version.outputs.version) || '' }}
       release_tag: ${{ needs.version.outputs.should_release == 'true' && format('v{0}', needs.version.outputs.version) || '' }}
+      include_extension: true
 
-  extension:
-    needs: version
-    if: needs.version.outputs.should_release == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: v${{ needs.version.outputs.version }}
-      - name: Package extension
-        run: |
-          mkdir -p dist
-          cd extension && zip -r "../dist/yad-link-extension-v${{ needs.version.outputs.version }}.zip" . -x '*.md'
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ needs.version.outputs.version }}
-          files: dist/*
