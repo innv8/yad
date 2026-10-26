@@ -1,0 +1,34 @@
+html { background: var(--surface); }
+body { width: 360px; background: var(--surface); }
+.ph { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); font: 700 14px var(--head); }
+.ph .status { margin-left: auto; font: 500 12px var(--text); color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.psec { padding: 10px 14px 4px; font: 700 10.5px var(--head); letter-spacing: .08em; text-transform: uppercase; color: var(--faint);
+  display: flex; justify-content: space-between; gap: 10px; }
+.psec button { all: unset; cursor: pointer; color: var(--accent); text-transform: none; letter-spacing: 0; font: 700 12px var(--head); }
+.psec button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.list { max-height: 360px; overflow-y: auto; }
+.prow { display: grid; grid-template-columns: 16px 30px 1fr; gap: 10px; align-items: center; padding: 7px 14px; cursor: pointer; user-select: none; }
+.prow:hover { background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
+.prow .tile { width: 30px; height: 30px; border-radius: 8px; }
+.prow .tile svg { width: 16px; height: 16px; }
+.prow .name { display: flex; align-items: center; min-width: 0; }
+.prow .name .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.q2 { font: 700 10.5px var(--head); color: var(--muted); border: 1px solid var(--line-strong); border-radius: 5px; padding: 0 5px; margin-left: 4px; flex: none; line-height: 15px; }
+.pfoot { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); margin-top: 6px;
+  font-size: 12px; color: var(--muted); }
+.pfoot label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.pfoot .btn { margin-left: auto; }
+.msg { padding: 0 14px 8px; color: var(--err); font-size: 12px; }
+.none { padding: 22px 22px 14px; color: var(--muted); font-size: 12.5px; line-height: 1.55; text-align: center; }
+.none b { display: block; color: var(--fg); font: 700 14px var(--head); margin-bottom: 4px; }
+.offline { padding: 26px 22px 18px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.offline .big { width: 48px; height: 48px; border-radius: 14px; background: var(--warn-soft); color: var(--warn); display: grid; place-items: center; }
+.offline .big svg { width: 22px; height: 22px; }
+.offline h3 { margin: 0; font: 700 16px var(--head); }
+.offline p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
+.offline p.err { color: var(--err); }
+.offline .get { font-size: 11.5px; color: var(--muted); }
+.offline .get a { text-decoration: none; }
+.offline .get a:hover { text-decoration: underline; }
+.offline code { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; background: var(--bg); border-radius: 4px; padding: 0 4px; }
+.sub.err { color: var(--err); white-space: normal; }

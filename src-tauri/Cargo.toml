@@ -1,30 +1,27 @@
 [package]
 name = "yad"
 version = "1.0.2"
-description = "A Tauri App"
-authors = ["you"]
+description = "YAD — Yet Another Downloader"
+authors = ["Samson Rapando"]
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "Apache-2.0"
 
 [lib]
-# The `_lib` suffix may seem redundant but it is necessary
-# to make the lib name unique and wouldn't conflict with the bin name.
-# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+# The `_lib` suffix keeps the lib name distinct from the bin name (cargo#8519 on Windows).
 name = "yad_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.0.3", features = [] }
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2.1.1", features = [] }
-tauri-plugin-opener = "2.0.0"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-reqwest = "0.12.9"
-rusqlite = "0.32.1"
-sys-info = "0.9.1"
-tokio = { version = "1", features = ["rt", "sync"] }
-tauri-plugin-notification = "2.0.0"
-tauri-plugin-dialog = "2.0.0"
+yad-core = { workspace = true }
+yadd = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-clipboard-manager = "2"

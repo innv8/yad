@@ -1,4 +1,4 @@
-name: Build and Release
+name: Release (macOS Apple Silicon)
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
       version: ${{ steps.bump.outputs.version }}
       should_release: ${{ steps.bump.outputs.should_release }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_PAT }}
@@ -72,12 +72,16 @@ jobs:
           jq ".version = \"$NEW_VERSION\"" src-tauri/tauri.conf.json > /tmp/tc.json
           mv /tmp/tc.json src-tauri/tauri.conf.json
 
-          sed -i 's/^version = ".*"/version = "'"$NEW_VERSION"'"/' src-tauri/Cargo.toml
+          for f in src-tauri/Cargo.toml crates/yad-core/Cargo.toml crates/yadd/Cargo.toml; do
+            sed -i 's/^version = ".*"/version = "'"$NEW_VERSION"'"/' "$f"
+          done
+          jq ".version = \"$NEW_VERSION\"" extension/manifest.json > /tmp/mf.json
+          mv /tmp/mf.json extension/manifest.json
 
           # Commit, tag, push
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src-tauri/tauri.conf.json src-tauri/Cargo.toml
+          git add src-tauri/tauri.conf.json src-tauri/Cargo.toml crates/yad-core/Cargo.toml crates/yadd/Cargo.toml extension/manifest.json
           git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
           git tag "v$NEW_VERSION"
           git push
@@ -86,58 +90,17 @@ jobs:
           echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
           echo "should_release=true" >> "$GITHUB_OUTPUT"
 
-  build:
+  # Apple Silicon is built on every push to main, together with the browser extension
+  # (same version). Other platforms: build-platforms.yml.
+  macos-arm64:
     needs: version
-    if: needs.version.outputs.should_release == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            bundle: dmg
-          - os: windows-latest
-            bundle: nsis
-          - os: ubuntu-latest
-            bundle: deb,appimage
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    uses: ./.github/workflows/build.yml
+    with:
+      runner: macos-latest
+      target: aarch64-apple-darwin
+      bundles: app,dmg
+      label: macos-arm64
+      ref: ${{ needs.version.outputs.should_release == 'true' && format('v{0}', needs.version.outputs.version) || '' }}
+      release_tag: ${{ needs.version.outputs.should_release == 'true' && format('v{0}', needs.version.outputs.version) || '' }}
+      include_extension: true
 
-      - name: Checkout release tag
-        run: |
-          git fetch --tags origin
-          git checkout "v${{ needs.version.outputs.version }}"
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-
-      - name: Install system deps (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            libjavascriptcoregtk-4.1-dev \
-            libsoup-3.0-dev
-
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2"
-
-      - name: Build bundles
-        run: cargo tauri build --bundles "${{ matrix.bundle }}"
-        working-directory: src-tauri
-
-      - name: Upload Release Assets
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ needs.version.outputs.version }}
-          files: src-tauri/target/release/bundle/**/*

@@ -1,5 +1,11 @@
 {
-  "dependencies": {
-    "@tauri-apps/api": "^2.1.1"
+  "name": "yad",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:ui": "playwright test -c tests/ui/playwright.config.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0"
   }
 }

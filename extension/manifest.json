@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "YAD Link",
+  "short_name": "YAD Link",
+  "version": "1.0.2",
+  "description": "Send videos and files from Chrome to YAD, the download manager on your computer.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4GEFjeyw3mRelQ2E7OyGmSGioQ8ZASAjAoKRaJt4bNHw4LT1wBQlkHDDLg2owyXTVc18/hDSVguflkAnMRxSAstBiKEQTKb6xPvuCGEZhMqWC50us6sO3MvE2ZePFp+Pfub7NPH3W/xdbdOWl9qjWgT5kFi+x/euvyWZOBOOv272/VeEpjGMpJ1cQ+eblEiK8T7fWyqK+ZC6kZRHiVlbfE1fbDrI5gOtDKpzJhe2aRM8ef2ZjVgJNoNeEXKxFoUsB+J0ByAAoPfGHbfmbfMPsjQHFmIIHUaCWHQKMkBGAa2Z0b+4is474VwXI4a+RqESWXqXEdEYozkyjJbqj7/xzwIDAQAB",
+  "minimum_chrome_version": "116",
+  "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
+  "action": {
+    "default_title": "YAD Link",
+    "default_popup": "popup/popup.html",
+    "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png" }
+  },
+  "options_ui": { "page": "options/options.html", "open_in_tab": true },
+  "background": { "service_worker": "background.js", "type": "module" },
+  "permissions": ["webRequest", "downloads", "cookies", "scripting", "tabs", "contextMenus", "nativeMessaging", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    { "matches": ["<all_urls>"], "js": ["content.js"], "all_frames": true, "run_at": "document_idle" }
+  ],
+  "web_accessible_resources": [
+    { "resources": ["fonts/archivo-narrow-latin.woff2", "fonts/tenor-sans-latin.woff2"], "matches": ["<all_urls>"] }
+  ],
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'self'" }
+}
