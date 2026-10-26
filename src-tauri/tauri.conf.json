@@ -10,14 +10,35 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Yet another Downloader",
-        "width": 800,
-        "height": 600
+        "label": "main",
+        "title": "YAD",
+        "width": 900,
+        "height": 620,
+        "minWidth": 720,
+        "minHeight": 520,
+        "center": true,
+        "decorations": false,
+        "dragDropEnabled": false
+      },
+      {
+        "label": "tray",
+        "url": "tray.html",
+        "title": "YAD",
+        "width": 320,
+        "height": 372,
+        "resizable": false,
+        "decorations": false,
+        "visible": false,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "transparent": true,
+        "shadow": false
       }
     ],
     "security": {
-      "csp": null
-    }
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost"
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,

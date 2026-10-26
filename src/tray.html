@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en" class="tray-page" data-entry="tray">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=320, initial-scale=1.0" />
+  <title>YAD</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <link rel="preload" href="assets/fonts/ArchivoNarrow.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="assets/fonts/TenorSans.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="assets/css/app.css" />
+  <script type="module" src="assets/js/boot.js"></script>
+</head>
+<body>
+  <div class="tray" id="tray">
+    <div class="th"><div class="logo"><svg class="i"><use href="#i-down"/></svg></div><b>YAD</b><span id="tray-summary"></span></div>
+    <div id="tray-rows"></div>
+    <div class="note" id="tray-note" hidden></div>
+    <div class="acts">
+      <button class="mi" data-a="pauseAll"><svg class="i"><use href="#i-pause"/></svg><span>Pause all</span></button>
+      <button class="mi" data-a="clipboard"><svg class="i"><use href="#i-link"/></svg><span>Download link from clipboard</span></button>
+      <button class="mi" data-a="open"><svg class="i"><use href="#i-down"/></svg><span>Open YAD</span></button>
+      <hr />
+      <button class="mi" data-a="quit"><svg class="i"><use href="#i-x"/></svg><span>Quit YAD</span><kbd id="quit-kbd">Ctrl Q</kbd></button>
+    </div>
+  </div>
+</body>
+</html>

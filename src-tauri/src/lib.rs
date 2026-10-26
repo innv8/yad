@@ -1,408 +1,246 @@
-use reqwest::Client;
-use serde::Serialize;
-use std::{
-    collections::HashMap,
-    fs::{self, File},
-    io::{Seek, SeekFrom, Write},
-    path::Path,
-    process::Command,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex, OnceLock,
-    },
-    time::{SystemTime, UNIX_EPOCH},
+//! The YAD window. It owns no downloads: every call goes to the background service over
+//! the local socket (starting it when needed) and service events are relayed to the page.
+
+use serde_json::Value;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
 };
+use tauri::{
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Emitter, Manager, PhysicalPosition, RunEvent, WindowEvent,
+};
+use tokio::sync::RwLock;
+use yad_core::{config::Paths, ipc::Client, protocol::Event, service::LaunchCommand};
 
-use tauri::{self, Emitter};
-use tauri_plugin_notification::NotificationExt;
-use tokio::sync::Semaphore;
+struct Bridge {
+    client: RwLock<Option<Client>>,
+    paths: Paths,
+    launch: LaunchCommand,
+    /// Mirrors Settings.keepRunning: closing the window hides it instead of quitting.
+    keep_running: AtomicBool,
+}
 
-pub mod config;
-pub mod files;
-pub mod storage;
-
-const CHUNK_SIZE: u64 = 1024 * 1024;
-const MAX_CONCURRENT_CHUNKS: usize = 4;
-const BROWSER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
-
-fn active_downloads() -> &'static Mutex<HashMap<i64, Arc<AtomicBool>>> {
-    static MAP: OnceLock<Mutex<HashMap<i64, Arc<AtomicBool>>>> = OnceLock::new();
-    MAP.get_or_init(|| Mutex::new(HashMap::new()))
+impl Bridge {
+    async fn client(&self) -> Result<Client, String> {
+        if let Some(c) = self.client.read().await.clone() {
+            return Ok(c);
+        }
+        // The connection loop is (re)connecting; give it a moment.
+        for _ in 0..50 {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            if let Some(c) = self.client.read().await.clone() {
+                return Ok(c);
+            }
+        }
+        Err("Can't reach the YAD service.".into())
+    }
 }
 
 #[tauri::command]
-fn fetch_records() -> Vec<storage::DownloadRecord> {
-    let cfg = config::Config::default();
-    storage::read_download_records(&cfg).unwrap_or_default()
-}
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct DownloadStarted<'a> {
-    download_id: i64,
-    file_url: &'a str,
-    file_name: &'a str,
-    file_type: &'a str,
-    download_status: &'a str,
-}
-
-#[derive(Clone, Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct DownloadProgress {
-    download_id: i64,
-    total_size: u64,
-    downloaded: u64,
-    timestamp: u64,
-}
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct DownloadMessage<'a> {
-    download_id: i64,
-    message: &'a str,
-    status: &'a str,
+async fn ipc(bridge: tauri::State<'_, Arc<Bridge>>, method: String, params: Option<Value>) -> Result<Value, String> {
+    let client = bridge.client().await?;
+    let result = client.call(&method, params.unwrap_or(Value::Null)).await;
+    if method == "getSettings" || method == "setSettings" {
+        if let Ok(v) = &result {
+            if let Some(k) = v.get("keepRunning").and_then(Value::as_bool) {
+                bridge.keep_running.store(k, Ordering::SeqCst);
+            }
+        }
+    }
+    result
 }
 
 #[tauri::command]
-async fn download(
-    window: tauri::Window,
-    url: String,
-    file_name: Option<String>,
-    destination_dir: Option<String>,
-) -> Result<(), String> {
-    if !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("ftp://") {
-        let _ = window.emit(
-            "download-message",
-            DownloadMessage {
-                download_id: 0,
-                message: "Invalid URL. Must start with http://, https://, or ftp://",
-                status: "error",
-            },
-        );
-        return Err("Invalid URL".into());
+fn open_path(app: AppHandle, path: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    if path.starts_with("http://") || path.starts_with("https://") {
+        app.opener().open_url(path, None::<&str>).map_err(|e| e.to_string())
+    } else {
+        app.opener().open_path(path, None::<&str>).map_err(|e| format!("Couldn't open the file: {e}"))
     }
+}
 
-    let cfg = config::Config::default();
-    let client = Client::new();
-
-    let total_size = client
-        .head(&url)
-        .send()
-        .await
-        .map_err(|e| format!("HEAD request failed: {e}"))?
-        .headers()
-        .get(reqwest::header::CONTENT_LENGTH)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.parse::<u64>().ok())
-        .ok_or_else(|| {
-            let _ = window.emit(
-                "download-message",
-                DownloadMessage {
-                    download_id: 0,
-                    message: "Server did not provide Content-Length header",
-                    status: "error",
-                },
-            );
-            "Missing Content-Length header".to_string()
-        })?;
-
-    if total_size == 0 {
-        return Err("File has zero size".into());
+#[tauri::command]
+fn reveal_path(app: AppHandle, path: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let p = std::path::PathBuf::from(&path);
+    if p.exists() {
+        app.opener().reveal_item_in_dir(p).map_err(|e| format!("Couldn't show the file: {e}"))
+    } else {
+        // Not downloaded yet: open the folder it will go to.
+        let dir = p.parent().map(|d| d.to_path_buf()).unwrap_or(p);
+        let _ = std::fs::create_dir_all(&dir);
+        app.opener().open_path(dir.to_string_lossy(), None::<&str>).map_err(|e| e.to_string())
     }
+}
 
-    let mut file = files::File::new(&url, &cfg);
+#[tauri::command]
+fn show_main(app: AppHandle) {
+    show_main_window(&app);
+}
 
-    if let Some(custom_name) = &file_name {
-        let trimmed = custom_name.trim();
-        if !trimmed.is_empty() {
-            let ext = Path::new(&file.file_name)
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("");
-            let final_name = if !trimmed.contains('.') && !ext.is_empty() {
-                format!("{}.{}", trimmed, ext)
-            } else {
-                trimmed.to_string()
-            };
-            file.file_name = final_name;
-            file.destination_path = format!("{}/{}", file.destination_dir, file.file_name);
+#[tauri::command]
+async fn quit_app(app: AppHandle, bridge: tauri::State<'_, Arc<Bridge>>, stop_daemon: Option<bool>) -> Result<(), String> {
+    if stop_daemon.unwrap_or(false) {
+        if let Ok(c) = bridge.client().await {
+            let _ = c.call("shutdown", Value::Null).await;
         }
     }
+    app.exit(0);
+    Ok(())
+}
 
-    if let Some(custom_dir) = &destination_dir {
-        let trimmed = custom_dir.trim();
-        if !trimmed.is_empty() {
-            let dir_path = Path::new(trimmed).join(&file.file_name);
-            if let Some(dir) = dir_path.parent() {
-                file.destination_dir = dir.to_str().unwrap_or(&file.destination_dir).to_string();
-            }
-            file.destination_path = dir_path.to_str().unwrap_or(&file.destination_path).to_string();
-        }
+fn show_main_window(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
     }
-
-    let mut record = storage::search_by_url(&url, &cfg).unwrap_or_default();
-
-    fs::create_dir_all(&file.destination_dir)
-        .map_err(|e| format!("Failed to create directory: {e}"))?;
-
-    if record.id == 0 {
-        let dr = storage::DownloadRecord::from(file.clone());
-        record.id = storage::insert_record(&dr, total_size, &cfg)
-            .map_err(|e| format!("Failed to save download record: {e}"))?;
-    } else if record.download_status == "Finished" {
-        let _ = window.emit(
-            "download-message",
-            DownloadMessage {
-                download_id: record.id,
-                message: "File already downloaded",
-                status: "success",
-            },
-        );
-        return Ok(());
+    if let Some(t) = app.get_webview_window("tray") {
+        let _ = t.hide();
     }
+}
 
-    let _ = window.emit(
-        "download-started",
-        DownloadStarted {
-            download_id: record.id,
-            file_url: &file.file_url,
-            file_name: &file.file_name,
-            file_type: &file.file_type.to_string(),
-            download_status: "InProgress",
-        },
-    );
-
-    let d_file = File::create(&file.destination_path)
-        .map_err(|e| format!("Failed to create file: {e}"))?;
-    d_file
-        .set_len(total_size)
-        .map_err(|e| format!("Failed to allocate file: {e}"))?;
-    let d_file = Arc::new(Mutex::new(d_file));
-
-    let cancelled = Arc::new(AtomicBool::new(false));
-    active_downloads()
-        .lock()
-        .unwrap()
-        .insert(record.id, Arc::clone(&cancelled));
-
-    let existing_chunks = storage::get_chunks_by_record(record.id, &cfg).unwrap_or_default();
-    let finished: HashMap<(u64, u64), bool> = existing_chunks
-        .iter()
-        .filter(|c| c.status == "Finished")
-        .map(|c| ((c.start, c.end), true))
-        .collect();
-
-    let mut ranges: Vec<(u64, u64)> = Vec::new();
-    for start in (0..total_size).step_by(CHUNK_SIZE as usize) {
-        let end = (start + CHUNK_SIZE - 1).min(total_size - 1);
-        if finished.contains_key(&(start, end)) {
-            continue;
-        }
-        let chunk = storage::Chunk::new(record.id, start, end);
-        let _ = storage::save_chunk(&chunk, &cfg);
-        ranges.push((start, end));
-    }
-
-    let progress = Arc::new(Mutex::new(0u64));
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<DownloadProgress>(64);
-    let pw = window.clone();
-    let progress_task = tokio::spawn(async move {
-        while let Some(p) = rx.recv().await {
-            let _ = pw.emit("download-progress", p);
-        }
-    });
-
-    let sem = Arc::new(Semaphore::new(MAX_CONCURRENT_CHUNKS));
-    let mut handles = Vec::with_capacity(ranges.len());
-
-    for (start, end) in ranges {
-        let s = Arc::clone(&sem);
-        let client = client.clone();
-        let d_file = Arc::clone(&d_file);
-        let tx = tx.clone();
-        let url = url.clone();
-        let p = Arc::clone(&progress);
-        let cancelled = Arc::clone(&cancelled);
-        let c = config::Config::default();
-        let rid = record.id;
-
-        handles.push(tokio::spawn(async move {
-            let _permit = s.acquire().await;
-
-            if cancelled.load(Ordering::Relaxed) {
-                let _ = storage::update_chunk(rid, start, "Cancelled", &c);
-                return;
-            }
-
-            let result = client
-                .get(&url)
-                .header("Range", format!("bytes={start}-{end}"))
-                .header("User-Agent", BROWSER_AGENT)
-                .send()
-                .await;
-
-            match result {
-                Ok(resp) => match resp.bytes().await {
-                    Ok(bytes) => {
-                        if let Ok(mut f) = d_file.lock() {
-                            let _ = f.seek(SeekFrom::Start(start));
-                            let _ = f.write_all(&bytes);
-                        }
-
-                        let mut prog = p.lock().unwrap();
-                        *prog += bytes.len() as u64;
-                        let current = *prog;
-                        drop(prog);
-
-                        let now = SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_millis() as u64;
-                        let _ = tx.try_send(DownloadProgress {
-                            download_id: rid,
-                            downloaded: current,
-                            total_size,
-                            timestamp: now,
-                        });
-
-                        let _ = storage::update_chunk(rid, start, "Finished", &c);
+/// Keeps one connection to the service, restarting it if it goes away, and relays events.
+async fn connection_loop(app: AppHandle, bridge: Arc<Bridge>) {
+    loop {
+        match Client::connect_or_spawn(&bridge.paths, &bridge.launch).await {
+            Ok((client, mut events, closed)) => {
+                let _ = client.call("subscribe", Value::Null).await;
+                if let Ok(s) = client.call("getSettings", Value::Null).await {
+                    if let Some(k) = s.get("keepRunning").and_then(Value::as_bool) {
+                        bridge.keep_running.store(k, Ordering::SeqCst);
                     }
-                    Err(e) => {
-                        eprintln!("Chunk {start}-{end} body failed: {e}");
-                        let _ = storage::update_chunk(rid, start, "Failed", &c);
-                    }
-                },
-                Err(e) => {
-                    eprintln!("Chunk {start}-{end} request failed: {e}");
-                    let _ = storage::update_chunk(rid, start, "Failed", &c);
                 }
+                *bridge.client.write().await = Some(client);
+                let _ = app.emit("yad-connection", serde_json::json!({ "connected": true }));
+                let relay = {
+                    let app = app.clone();
+                    let bridge = bridge.clone();
+                    tokio::spawn(async move {
+                        while let Some(e) = events.recv().await {
+                            if let Event::Settings { settings } = &e {
+                                bridge.keep_running.store(settings.keep_running, Ordering::SeqCst);
+                            }
+                            let _ = app.emit("yad-event", &e);
+                        }
+                    })
+                };
+                let _ = closed.await;
+                relay.abort();
+                *bridge.client.write().await = None;
+                let _ = app.emit("yad-connection", serde_json::json!({ "connected": false }));
             }
-        }));
-    }
-
-    for h in handles {
-        let _ = h.await;
-    }
-
-    drop(tx);
-    let _ = progress_task.await;
-
-    active_downloads().lock().unwrap().remove(&record.id);
-
-    let (pending, _finished, failed) =
-        storage::count_chunks(record.id, &cfg).unwrap_or_default();
-
-    if failed > 0 || pending > 0 {
-        let _ = window.emit(
-            "download-message",
-            DownloadMessage {
-                download_id: record.id,
-                message: if failed > 0 {
-                    "Download completed with errors — some chunks failed"
-                } else {
-                    "Download incomplete — some chunks are pending"
-                },
-                status: "error",
-            },
-        );
-        let _ = window
-            .notification()
-            .builder()
-            .title("YAD — Download incomplete")
-            .body(&format!("{} — {} chunks failed", file.file_name, failed))
-            .show();
-    } else {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        let _ =
-            storage::update_download_record(record.id, "Finished", Some(now), total_size, &cfg);
-
-        let _ = window.emit(
-            "download-message",
-            DownloadMessage {
-                download_id: record.id,
-                message: "Download completed successfully",
-                status: "success",
-            },
-        );
-        let _ = window
-            .notification()
-            .builder()
-            .title("YAD — Download complete")
-            .body(&format!("{} downloaded successfully", file.file_name))
-            .show();
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
-fn cancel_download(download_id: i64) -> Result<(), String> {
-    let map = active_downloads().lock().unwrap();
-    if let Some(cancelled) = map.get(&download_id) {
-        cancelled.store(true, Ordering::Relaxed);
-        let cfg = config::Config::default();
-        let _ = storage::update_download_record(
-            download_id,
-            "Cancelled",
-            None,
-            0,
-            &cfg,
-        );
-        Ok(())
-    } else {
-        Err("No active download found with this id".into())
+            Err(e) => log::warn!("can't reach the service: {e}"),
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 }
 
-#[tauri::command]
-fn delete_record(id: i64) -> Result<(), String> {
-    let cfg = config::Config::default();
-    storage::delete_record(id, &cfg).map_err(|e| format!("Failed to delete record: {e}"))
-}
-
-#[tauri::command]
-async fn open_file(path: String) -> Result<(), String> {
-    let cfg = config::Config::default();
-    let os: &str = &cfg.os;
-    let command = match os {
-        "Windows" => "explorer",
-        "Darwin" => "open",
-        _ => "xdg-open",
-    };
-
-    Command::new(command)
-        .arg(&path)
-        .output()
-        .map_err(|e| format!("Failed to open file: {e}"))?;
-    Ok(())
+fn toggle_tray_window(app: &AppHandle, click: PhysicalPosition<f64>) {
+    let Some(w) = app.get_webview_window("tray") else { return };
+    if w.is_visible().unwrap_or(false) {
+        let _ = w.hide();
+        return;
+    }
+    let size = w.outer_size().unwrap_or_default();
+    let (mut x, mut y) = (click.x - size.width as f64 / 2.0, click.y + 8.0);
+    let mut edge = "top";
+    if let Ok(Some(m)) = w.current_monitor().or_else(|_| app.primary_monitor()) {
+        let mpos = m.position();
+        let msize = m.size();
+        // Taskbar at the bottom (Windows, many Linux desktops): open upwards.
+        if click.y > mpos.y as f64 + msize.height as f64 / 2.0 {
+            y = click.y - size.height as f64 - 8.0;
+            edge = "bottom";
+        }
+        let max_x = (mpos.x + msize.width as i32) as f64 - size.width as f64 - 8.0;
+        x = x.clamp(mpos.x as f64 + 8.0, max_x.max(mpos.x as f64 + 8.0));
+    }
+    let _ = w.set_position(PhysicalPosition::new(x, y));
+    // The card hugs the side next to the tray icon; the rest of the window is transparent.
+    let _ = w.emit("tray-anchor", serde_json::json!({ "edge": edge }));
+    let _ = w.show();
+    let _ = w.set_focus();
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let cfg = config::Config::default();
-    match storage::create_tables(&cfg) {
-        Ok(()) => {
-            println!("created tables successfully");
-        }
-        Err(e) => {
-            panic!("Failed to create tables because {e}");
-        }
-    };
+    let bridge = Arc::new(Bridge {
+        client: RwLock::new(None),
+        paths: Paths::from_env(),
+        launch: LaunchCommand::current(&["--daemon"]),
+        keep_running: AtomicBool::new(true),
+    });
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main_window(app)))
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![
-            fetch_records,
-            download,
-            cancel_download,
-            delete_record,
-            open_file
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .manage(bridge.clone())
+        .invoke_handler(tauri::generate_handler![ipc, open_path, reveal_path, show_main, quit_app])
+        .setup(move |app| {
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(connection_loop(handle, bridge.clone()));
+
+            let mut tray = TrayIconBuilder::with_id("yad").tooltip("YAD").on_tray_icon_event(|tray, event| {
+                if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, position, .. } = event {
+                    toggle_tray_window(tray.app_handle(), position);
+                }
+            });
+            if let Some(icon) = app.default_window_icon() {
+                tray = tray.icon(icon.clone());
+            }
+            #[cfg(target_os = "macos")]
+            {
+                tray = tray.icon_as_template(false);
+            }
+            tray.build(app)?;
+
+            if let Some(t) = app.get_webview_window("tray") {
+                let t2 = t.clone();
+                t.on_window_event(move |e| {
+                    if let WindowEvent::Focused(false) = e {
+                        let _ = t2.hide();
+                    }
+                });
+            }
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if window.label() != "main" {
+                return;
+            }
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                let bridge = window.state::<Arc<Bridge>>();
+                if bridge.keep_running.load(Ordering::SeqCst) {
+                    // Downloads go on in the service; the tray icon brings the window back.
+                    api.prevent_close();
+                    let _ = window.hide();
+                } else {
+                    // "Keep downloading when the window is closed" is off: stop everything.
+                    let bridge = bridge.inner().clone();
+                    let app = window.app_handle().clone();
+                    api.prevent_close();
+                    tauri::async_runtime::spawn(async move {
+                        if let Some(c) = bridge.client.read().await.clone() {
+                            let _ = c.call("shutdown", Value::Null).await;
+                        }
+                        app.exit(0);
+                    });
+                }
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building YAD");
+
+    app.run(|app, event| {
+        #[cfg(target_os = "macos")]
+        if let RunEvent::Reopen { .. } = event {
+            show_main_window(app);
+        }
+        let _ = (app, &event);
+    });
 }

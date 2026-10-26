@@ -5,8 +5,12 @@ on:
     branches: [main]
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  rust:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -14,10 +18,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
 
-      - name: Install system dependencies
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -27,12 +30,49 @@ jobs:
             librsvg2-dev \
             libjavascriptcoregtk-4.1-dev \
             libsoup-3.0-dev \
-            mold
+            mold \
+            ffmpeg
 
-      - name: Use mold linker
+      - name: Use mold linker (Linux)
+        if: runner.os == 'Linux'
         run: |
           echo 'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=clang' >> "$GITHUB_ENV"
           echo 'CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS=-C link-arg=-fuse-ld=mold -C debuginfo=0' >> "$GITHUB_ENV"
 
-      - run: cargo test
-        working-directory: src-tauri
+      # Engine, storage, parsers and end-to-end downloads against a local test server.
+      - run: cargo test -p yad-core -p yadd
+        env:
+          YAD_SKIP_NATIVE_HOST: "1"
+
+      # The app crate only needs to compile; it has no unit tests of its own.
+      - run: cargo build -p yad
+
+  ui:
+    # The same screens rendered by Chromium (WebView2) and WebKit (WKWebView/WebKitGTK)
+    # must lay out identically on every OS.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run test:ui
+
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax-check extension scripts
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('extension/manifest.json','utf8'))"
+          find extension -name '*.js' -print0 | xargs -0 -n1 node --check

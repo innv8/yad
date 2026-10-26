@@ -1,0 +1,99 @@
+/* YAD Link: matte tokens and components (shared by popup and options). */
+@font-face { font-family: 'Archivo Narrow'; font-weight: 400 700; font-style: normal; font-display: block;
+  src: url('../fonts/archivo-narrow-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Tenor Sans'; font-weight: 400; font-style: normal; font-display: block;
+  src: url('../fonts/tenor-sans-latin.woff2') format('woff2'); }
+
+:root {
+  color-scheme: light dark;
+  --bg: #edeeec; --surface: #f5f5f3; --sidebar: #e4e5e2; --line: #d8d9d5; --line-strong: #c6c8c3;
+  --fg: #2b2e33; --muted: #676c74; --faint: #959aa0;
+  --accent: #4c6a92; --accent-soft: #dce2ea; --accent-fg: #f3f4f5;
+  --ok: #4f7d62; --ok-soft: #dce6de; --warn: #93733f; --warn-soft: #ebe3d3; --err: #a35752; --err-soft: #eddbd9;
+  --v: #74679a; --v-bg: #e2dfe9; --z: #96733f; --z-bg: #eae3d6; --d: #4c6a92; --d-bg: #dce2ea;
+  --a: #4f7d62; --a-bg: #dce6de; --m: #96596f; --m-bg: #ebdfe3;
+  --head: 'Archivo Narrow', 'Arial Narrow', sans-serif; --text: 'Tenor Sans', 'Gill Sans', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e2023; --surface: #25282c; --sidebar: #1a1c1f; --line: #2f3237; --line-strong: #3b3f45;
+    --fg: #cdd0d4; --muted: #8c9199; --faint: #636870;
+    --accent: #7f9bc0; --accent-soft: #2c3542; --accent-fg: #1c1f23;
+    --ok: #80a78d; --ok-soft: #27312b; --warn: #bea073; --warn-soft: #332e25; --err: #c4877f; --err-soft: #372a28;
+    --v: #a296c0; --v-bg: #2e2b36; --z: #bea073; --z-bg: #332e25; --d: #7f9bc0; --d-bg: #2c3542;
+    --a: #80a78d; --a-bg: #27312b; --m: #c08b9d; --m-bg: #362b30;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font-family: var(--text); background: var(--bg); color: var(--fg); font-size: 13.5px;
+  -webkit-font-smoothing: antialiased; font-synthesis: none; }
+h1, h2, h3, h4, button, select, .h, .nav a, .pill { font-family: var(--head); }
+button { cursor: pointer; font: inherit; color: inherit; }
+a { color: var(--accent); }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+svg.i { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round;
+  stroke-linejoin: round; flex: none; }
+
+.logo { width: 20px; height: 20px; border-radius: 6px; background: var(--fg); color: var(--bg); display: grid; place-items: center; flex: none; }
+.logo svg { width: 12px; height: 12px; stroke-width: 2.4; }
+
+.live { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
+.live.off { background: var(--faint); }
+.live.busy { background: var(--warn); animation: pulse 1s ease-in-out infinite alternate; }
+@keyframes pulse { from { opacity: 1; } to { opacity: .35; } }
+
+.btn { height: 30px; padding: 0 14px; border-radius: 8px; border: 1px solid transparent; background: var(--accent);
+  color: var(--accent-fg); font: 700 12.5px var(--head); display: inline-flex; align-items: center; justify-content: center;
+  gap: 6px; white-space: nowrap; }
+.btn.ghost { background: transparent; color: var(--fg); border-color: var(--line-strong); }
+.btn:disabled { opacity: .5; cursor: default; }
+.icon-btn { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--muted);
+  border: 1px solid transparent; background: transparent; padding: 0; }
+.icon-btn:hover { background: var(--accent-soft); color: var(--accent); }
+
+.tile { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; flex: none; }
+.tile svg { width: 17px; height: 17px; }
+.t-video { background: var(--v-bg); color: var(--v); }
+.t-zip { background: var(--z-bg); color: var(--z); }
+.t-doc { background: var(--d-bg); color: var(--d); }
+.t-app { background: var(--a-bg); color: var(--a); }
+.t-audio { background: var(--m-bg); color: var(--m); }
+.t-image { background: var(--a-bg); color: var(--a); }
+
+.meta { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.name { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sub { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.cb { width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid var(--line-strong); display: grid; place-items: center;
+  flex: none; padding: 0; background: transparent; color: var(--accent-fg); }
+.cb svg { width: 11px; height: 11px; stroke-width: 3; visibility: hidden; }
+.cb[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+.cb[aria-checked="true"] svg { visibility: visible; }
+
+.toggle { width: 32px; height: 18px; border-radius: 99px; background: var(--line-strong); position: relative; flex: none;
+  border: 0; padding: 0; transition: background .15s; }
+.toggle::after { content: ''; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--surface); transition: left .15s; }
+.toggle[aria-checked="true"] { background: var(--accent); }
+.toggle[aria-checked="true"]::after { left: 16px; }
+.toggle:disabled { opacity: .5; cursor: default; }
+
+.select { position: relative; min-width: 150px; }
+.select select { appearance: none; width: 100%; height: 30px; border: 1px solid var(--line-strong); border-radius: 8px;
+  background: var(--surface); color: var(--fg); padding: 0 30px 0 10px; font: 400 12.5px var(--text); cursor: pointer; }
+.select svg { position: absolute; right: 9px; top: 8px; width: 14px; height: 14px; color: var(--muted); pointer-events: none; }
+
+.statusbox { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--surface); }
+.statusbox .lab { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.statusbox b { font: 700 13.5px var(--head); }
+.statusbox span:not(.live) { color: var(--muted); font-size: 12px; }
+
+.spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent;
+  animation: spin .8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin, .live.busy { animation: none; } }
